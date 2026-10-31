@@ -82,7 +82,7 @@ public sealed class VerifyCommandTests {
             temp,
             "my-plugin-0.1.0.van",
             ValidManifest,
-            [("dist/", null)]);
+            [("dist/", null), ("dist/app.ts", "// app")]);
 
         VerifyResult result = Verify(archivePath);
 
@@ -220,6 +220,91 @@ public sealed class VerifyCommandTests {
             Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
 
         Assert.Single(errorLines, line => line.Contains("node_modules"));
+    }
+
+    [Fact]
+    public void Verify_EntrypointFilePresent_ReturnsSuccess() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(
+            temp,
+            "my-plugin-0.1.0.van",
+            ValidManifest,
+            [("dist/app.ts", "// app")]);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Equal("OK" + Environment.NewLine, result.StandardOut);
+        Assert.Empty(result.StandardError);
+    }
+
+    [Fact]
+    public void Verify_MissingEntrypointFile_ReturnsRuntimeError() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(
+            temp,
+            "my-plugin-0.1.0.van",
+            ValidManifest,
+            [("dist/other.ts", "")]);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains(
+            "The entrypoint file 'dist/app.ts' specified in manifest.json does not exist in the archive.",
+            result.StandardError);
+    }
+
+    [Fact]
+    public void Verify_EntrypointIsDirectory_ReturnsRuntimeError() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(
+            temp,
+            "my-plugin-0.1.0.van",
+            ValidManifest,
+            [("dist/app.ts/", null)]);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains("The entrypoint file 'dist/app.ts'", result.StandardError);
+    }
+
+    [Fact]
+    public void Verify_MalformedManifest_SkipsEntrypointCheck() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(
+            temp,
+            "my-plugin-0.1.0.van",
+            "{ not json",
+            [("dist/other.ts", "")]);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+
+        string[] errorLines = result.StandardError.Split(
+            Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+
+        Assert.Single(errorLines);
+        Assert.Contains("Invalid JSON format", result.StandardError);
+        Assert.DoesNotContain("entrypoint file", result.StandardError);
+    }
+
+    [Fact]
+    public void Verify_MissingDistAndEntrypoint_ReportsBothErrors() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(temp, "my-plugin-0.1.0.van", ValidManifest, []);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains("The 'dist/' directory is missing from the archive root.", result.StandardError);
+        Assert.Contains("The entrypoint file 'dist/app.ts'", result.StandardError);
     }
 
     private static string CreateArchive(

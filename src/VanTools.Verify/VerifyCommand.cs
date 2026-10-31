@@ -74,6 +74,7 @@ public sealed class VerifyCommand : ICommand {
             CollectFilenameErrors(archivePath, manifest, errors);
             CollectDistErrors(archive, errors);
             CollectNodeModulesErrors(archive, errors);
+            CollectEntrypointErrors(archive, manifest, errors);
 
             if (errors.Count > 0) {
                 foreach (string error in errors) {
@@ -155,6 +156,30 @@ public sealed class VerifyCommand : ICommand {
         }
 
         return null;
+    }
+
+    // Records a message when the manifest entrypoint is not present as a file under dist/ in the archive.
+    // archive: the opened archive.
+    // manifest: the values parsed from the manifest, or null when the manifest could not be read.
+    // errors: the list that receives the problem description.
+    private static void CollectEntrypointErrors(ZipArchive archive, Manifest? manifest, List<string> errors) {
+        if (manifest is null || manifest.Entrypoint.Length == 0) {
+            return;
+        }
+
+        string entrypointPath = $"{DistDirectoryName}/{manifest.Entrypoint}";
+
+        bool exists = archive.Entries.Any(entry =>
+            string.Equals(entry.FullName, entrypointPath, StringComparison.Ordinal)
+            && !entry.FullName.EndsWith('/')
+            && entry.Name.Length > 0);
+
+        if (exists) {
+            return;
+        }
+
+        errors.Add(
+            $"The entrypoint file '{entrypointPath}' specified in manifest.json does not exist in the archive.");
     }
 
     // Finds the archive entry named exactly "manifest.json" at the archive root.
