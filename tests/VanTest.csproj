@@ -17,6 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\src\VanTools.Core\VanTools.Core.csproj" />
     <ProjectReference Include="..\src\VanTools.Pack\VanTools.Pack.csproj" />
+    <ProjectReference Include="..\src\VanTools.Verify\VanTools.Verify.csproj" />
   </ItemGroup>
 
   <ItemGroup>

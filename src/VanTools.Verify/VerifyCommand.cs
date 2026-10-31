@@ -68,7 +68,9 @@ public sealed class VerifyCommand : ICommand {
                 jsonContent = reader.ReadToEnd();
             }
 
-            List<string> errors = ManifestValidator.Validate(jsonContent);
+            List<string> errors = ManifestValidator.Validate(jsonContent, out Manifest? manifest);
+            CollectFilenameErrors(archivePath, manifest, errors);
+
             if (errors.Count > 0) {
                 foreach (string error in errors) {
                     ErrorWriter.Write(error);
@@ -81,6 +83,26 @@ public sealed class VerifyCommand : ICommand {
         Console.Out.WriteLine("OK");
 
         return ExitCodes.Success;
+    }
+
+    // Records a message when the archive filename is not "<name>-<version>.van" as derived from the manifest.
+    // archivePath: the path given to "--s".
+    // manifest: the values parsed from the manifest, or null when the manifest could not be read.
+    // errors: the list that receives the problem description.
+    private static void CollectFilenameErrors(string archivePath, Manifest? manifest, List<string> errors) {
+        if (manifest is null || manifest.Name.Length == 0 || manifest.Version.Length == 0) {
+            return;
+        }
+
+        string expectedName = $"{manifest.Name}-{manifest.Version}.van";
+        string actualName = Path.GetFileName(archivePath);
+
+        if (string.Equals(actualName, expectedName, StringComparison.OrdinalIgnoreCase)) {
+            return;
+        }
+
+        errors.Add(
+            $"The archive filename '{actualName}' does not match the expected name '{expectedName}' (derived from manifest.json).");
     }
 
     // Finds the archive entry named exactly "manifest.json" at the archive root.
