@@ -40,6 +40,12 @@ public sealed class PackCommand : ICommand {
 
         try {
             return Pack(sourceDirectory, targetDirectory);
+        } catch (ManifestException exception) {
+            foreach (string error in exception.Errors) {
+                ErrorWriter.Write(error);
+            }
+
+            return ExitCodes.RuntimeError;
         } catch (Exception exception) {
             ErrorWriter.Write(exception.Message);
             return ExitCodes.RuntimeError;
