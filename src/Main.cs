@@ -1,30 +1,23 @@
 using VanTools.Core;
 using VanTools.Pack;
 
-ICommand[] commands = [new PackCommand()];
+CommandRegistry registry = new("vantools");
+registry.Register(new PackCommand());
 
 if (args.Length == 0) {
-    PrintUsage();
-    return 1;
+    Console.Out.Write(registry.RenderTopLevelUsage());
+    return ExitCodes.UsageError;
 }
 
-ICommand? command = null;
-foreach (ICommand candidate in commands) {
-    if (candidate.Name == args[0]) {
-        command = candidate;
-        break;
-    }
+if (args[0] is "--help" or "-h") {
+    Console.Out.Write(registry.RenderTopLevelUsage());
+    return ExitCodes.Success;
 }
 
-if (command is null) {
-    PrintUsage();
-    return 1;
+if (!registry.TryGet(args[0], out ICommand? command)) {
+    Console.Error.WriteLine($"error: unknown command '{args[0]}'");
+    Console.Error.Write(registry.RenderTopLevelUsage());
+    return ExitCodes.UsageError;
 }
 
 return command.Execute(args[1..]);
-
-static void PrintUsage() {
-    Console.Error.WriteLine("Usage: vantools <command> [options]");
-    Console.Error.WriteLine("Commands:");
-    Console.Error.WriteLine("  pack --s <source> --t <target>");
-}
