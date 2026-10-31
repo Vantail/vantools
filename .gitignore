@@ -30,3 +30,7 @@ out/
 
 # Dependency directories
 node_modules/
+
+# .NET build output
+bin/
+obj/
