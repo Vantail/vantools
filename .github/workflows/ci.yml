@@ -37,7 +37,7 @@ jobs:
         run: dotnet test VanTools.sln --configuration Release --no-build
 
   report-failure:
-    name: Report failure (${{ matrix.os }})
+    name: Report failure
     needs: test
     if: >
       failure() &&
@@ -49,7 +49,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - name: Create or skip failure issue
+      - name: Create issue for ${{ matrix.os }}
         uses: actions/github-script@v7
         with:
           script: |
