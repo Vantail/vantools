@@ -7,6 +7,7 @@ namespace VanTools.Verify;
 // The "verify" subcommand, which validates the manifest.json inside a .van archive.
 public sealed class VerifyCommand : ICommand {
     private const string ManifestFileName = "manifest.json";
+    private const string DistDirectoryName = "dist";
 
     private static readonly ArgumentParser Parser = new ArgumentParser()
         .Required("s", "source archive");
@@ -70,6 +71,7 @@ public sealed class VerifyCommand : ICommand {
 
             List<string> errors = ManifestValidator.Validate(jsonContent, out Manifest? manifest);
             CollectFilenameErrors(archivePath, manifest, errors);
+            CollectDistErrors(archive, errors);
 
             if (errors.Count > 0) {
                 foreach (string error in errors) {
@@ -103,6 +105,22 @@ public sealed class VerifyCommand : ICommand {
 
         errors.Add(
             $"The archive filename '{actualName}' does not match the expected name '{expectedName}' (derived from manifest.json).");
+    }
+
+    // Records a message when the archive root has no dist/ directory, either as an explicit entry or as the parent of a file entry.
+    // archive: the opened archive.
+    // errors: the list that receives the problem description.
+    private static void CollectDistErrors(ZipArchive archive, List<string> errors) {
+        const string distEntryName = DistDirectoryName + "/";
+
+        bool hasDist = archive.Entries.Any(entry =>
+            string.Equals(entry.FullName, distEntryName, StringComparison.Ordinal)
+            || string.Equals(entry.FullName, DistDirectoryName, StringComparison.Ordinal)
+            || entry.FullName.StartsWith(distEntryName, StringComparison.Ordinal));
+
+        if (!hasDist) {
+            errors.Add("The 'dist/' directory is missing from the archive root.");
+        }
     }
 
     // Finds the archive entry named exactly "manifest.json" at the archive root.
