@@ -15,7 +15,7 @@ if (args[0] is "--help" or "-h") {
 }
 
 if (!registry.TryGet(args[0], out ICommand? command)) {
-    Console.Error.WriteLine($"error: unknown command '{args[0]}'");
+    ErrorWriter.Write($"unknown command '{args[0]}'");
     Console.Error.Write(registry.RenderTopLevelUsage());
     return ExitCodes.UsageError;
 }
