@@ -38,6 +38,32 @@ dotnet run --project src/VanTools.csproj -- pack --s examples/empty-archive --t 
 
 This reads the manifest from `examples/empty-archive/`, validates it, and creates `output/empty-archive-0.1.0.van`.
 
+### Verify
+
+Validates an existing `.van` archive against the format specification.
+
+```bash
+dotnet run --project src/VanTools.csproj -- verify --s <archive-path>
+```
+
+- `--s`: The path to the `.van` archive to verify.
+
+Example:
+
+```bash
+dotnet run --project src/VanTools.csproj -- verify --s ./output/example-plugin-0.1.0.van
+```
+
+The `verify` command performs the following checks:
+
+- Parses and validates `manifest.json` (required fields, semantic versioning, safe entrypoint path).
+- Confirms the archive filename matches the `<name>-<version>.van` pattern derived from the manifest.
+- Ensures a `dist/` directory exists at the archive root.
+- Confirms no `node_modules` directory exists at any depth.
+- Ensures the file specified by `entrypoint` exists inside `dist/`.
+
+If all checks pass, it prints `OK` and exits with code `0`. If any check fails, it prints all detected errors to stderr and exits with a non-zero code.
+
 ## The `.van` Format
 
 The archive format, validation rules, and path-safety requirements are defined in [SPEC.md](./docs/SPEC.md).
