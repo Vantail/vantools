@@ -55,3 +55,7 @@ dotnet_diagnostic.CS1589.severity = none
 dotnet_diagnostic.CS1590.severity = none
 dotnet_diagnostic.CS1592.severity = none
 dotnet_diagnostic.CS1658.severity = none
+
+# Enforce formatting and blank-line rules at build time
+dotnet_diagnostic.IDE0055.severity = warning
+dotnet_diagnostic.IDE2000.severity = warning

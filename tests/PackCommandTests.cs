@@ -3,18 +3,15 @@ using VanTools.Pack;
 
 namespace VanTest;
 
-public sealed class PackCommandTests
-{
+public sealed class PackCommandTests {
     [Fact]
-    public void Pack_WritesManifestAndDistAtArchiveRoot()
-    {
+    public void Pack_WritesManifestAndDistAtArchiveRoot() {
         string repositoryRoot = FindRepositoryRoot();
         string source = Path.Combine(repositoryRoot, "examples", "empty-archive");
         string target = Path.Combine(repositoryRoot, "tests");
         string archivePath = Path.Combine(target, "empty-archive-0.1.0.van");
 
-        if (File.Exists(archivePath))
-        {
+        if (File.Exists(archivePath)) {
             File.Delete(archivePath);
         }
 
@@ -32,14 +29,11 @@ public sealed class PackCommandTests
         Assert.Contains("dist/.gitkeep", entryNames);
     }
 
-    private static string FindRepositoryRoot()
-    {
+    private static string FindRepositoryRoot() {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
 
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "VanTools.sln")))
-            {
+        while (directory is not null) {
+            if (File.Exists(Path.Combine(directory.FullName, "VanTools.sln"))) {
                 return directory.FullName;
             }
 
