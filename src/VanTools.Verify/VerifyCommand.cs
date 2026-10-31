@@ -8,6 +8,7 @@ namespace VanTools.Verify;
 public sealed class VerifyCommand : ICommand {
     private const string ManifestFileName = "manifest.json";
     private const string DistDirectoryName = "dist";
+    private const string NodeModulesDirectoryName = "node_modules";
 
     private static readonly ArgumentParser Parser = new ArgumentParser()
         .Required("s", "source archive");
@@ -72,6 +73,7 @@ public sealed class VerifyCommand : ICommand {
             List<string> errors = ManifestValidator.Validate(jsonContent, out Manifest? manifest);
             CollectFilenameErrors(archivePath, manifest, errors);
             CollectDistErrors(archive, errors);
+            CollectNodeModulesErrors(archive, errors);
 
             if (errors.Count > 0) {
                 foreach (string error in errors) {
@@ -121,6 +123,38 @@ public sealed class VerifyCommand : ICommand {
         if (!hasDist) {
             errors.Add("The 'dist/' directory is missing from the archive root.");
         }
+    }
+
+    // Records one message per unique node_modules directory, at any depth.
+    // archive: the opened archive.
+    // errors: the list that receives the problem descriptions.
+    private static void CollectNodeModulesErrors(ZipArchive archive, List<string> errors) {
+        HashSet<string> reportedDirectories = new(StringComparer.Ordinal);
+
+        foreach (ZipArchiveEntry entry in archive.Entries) {
+            string? directoryPath = FindNodeModulesDirectory(entry.FullName);
+            if (directoryPath is null || !reportedDirectories.Add(directoryPath)) {
+                continue;
+            }
+
+            errors.Add(
+                $"The archive contains a 'node_modules' directory, which is not allowed (found in '{entry.FullName}').");
+        }
+    }
+
+    // Finds the path of the first node_modules directory in an entry name.
+    // entryName: the archive entry name, with "/" separators.
+    // Returns: the directory path ending in "node_modules/", or null when no segment is named node_modules.
+    private static string? FindNodeModulesDirectory(string entryName) {
+        string[] segments = entryName.Split('/');
+
+        for (int index = 0; index < segments.Length; index++) {
+            if (string.Equals(segments[index], NodeModulesDirectoryName, StringComparison.Ordinal)) {
+                return string.Join('/', segments[..(index + 1)]) + "/";
+            }
+        }
+
+        return null;
     }
 
     // Finds the archive entry named exactly "manifest.json" at the archive root.

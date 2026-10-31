@@ -132,6 +132,96 @@ public sealed class VerifyCommandTests {
         Assert.Contains("The 'dist/' directory is missing from the archive root.", result.StandardError);
     }
 
+    [Fact]
+    public void Verify_NodeModulesAtRoot_ReturnsRuntimeError() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(
+            temp,
+            "my-plugin-0.1.0.van",
+            ValidManifest,
+            [("dist/app.ts", "// app"), ("node_modules/foo.js", "")]);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains("node_modules", result.StandardError);
+    }
+
+    [Fact]
+    public void Verify_NestedNodeModules_ReturnsRuntimeError() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(
+            temp,
+            "my-plugin-0.1.0.van",
+            ValidManifest,
+            [("dist/app.ts", "// app"), ("dist/node_modules/foo.js", "")]);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains("node_modules", result.StandardError);
+    }
+
+    [Fact]
+    public void Verify_DeeplyNestedNodeModules_ReturnsRuntimeError() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(
+            temp,
+            "my-plugin-0.1.0.van",
+            ValidManifest,
+            [("dist/app.ts", "// app"), ("dist/src/node_modules/foo.js", "")]);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains("node_modules", result.StandardError);
+    }
+
+    [Theory]
+    [InlineData("dist/my-node_modules-file.js")]
+    [InlineData("dist/node_modules_backup/foo.js")]
+    public void Verify_SimilarDirectoryName_ReturnsSuccess(string entryName) {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(
+            temp,
+            "my-plugin-0.1.0.van",
+            ValidManifest,
+            [("dist/app.ts", "// app"), (entryName, "")]);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Equal("OK" + Environment.NewLine, result.StandardOut);
+        Assert.Empty(result.StandardError);
+    }
+
+    [Fact]
+    public void Verify_MultipleFilesInNodeModules_ReportsOneError() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(
+            temp,
+            "my-plugin-0.1.0.van",
+            ValidManifest,
+            [
+                ("dist/app.ts", "// app"),
+                ("dist/node_modules/a.js", ""),
+                ("dist/node_modules/b.js", "")
+            ]);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+
+        string[] errorLines = result.StandardError.Split(
+            Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+
+        Assert.Single(errorLines, line => line.Contains("node_modules"));
+    }
+
     private static string CreateArchive(
         TempDirectory temp,
         string fileName,
