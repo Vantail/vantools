@@ -7,4 +7,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove="VanTools.Core\**;VanTools.Pack\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="VanTools.Pack\VanTools.Pack.csproj" />
+  </ItemGroup>
+
 </Project>
