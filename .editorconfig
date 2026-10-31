@@ -1,0 +1,57 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{csproj,props,targets,sln}]
+indent_size = 2
+
+[*.{yml,yaml,json,md}]
+indent_size = 2
+
+[*.cs]
+# K&R brace style (opening brace on the same line)
+csharp_new_line_before_open_brace = none
+
+# else/catch/finally on the same line as the closing brace
+csharp_new_line_before_else = false
+csharp_new_line_before_catch = false
+csharp_new_line_before_finally = false
+
+# Do not force new lines inside object/collection initializers or anonymous types
+csharp_new_line_before_members_in_object_initializers = false
+csharp_new_line_before_members_in_anonymous_types = false
+
+# Preserve single-line blocks and statements where already written
+csharp_preserve_single_line_blocks = true
+csharp_preserve_single_line_statements = true
+
+# Reject multiple consecutive blank lines
+dotnet_style_allow_multiple_blank_lines_experimental = false
+
+# Organize usings
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# Disable XML documentation warnings — regular // comments are sufficient
+dotnet_diagnostic.CS1591.severity = none
+dotnet_diagnostic.CS1570.severity = none
+dotnet_diagnostic.CS1571.severity = none
+dotnet_diagnostic.CS1572.severity = none
+dotnet_diagnostic.CS1573.severity = none
+dotnet_diagnostic.CS1574.severity = none
+dotnet_diagnostic.CS1580.severity = none
+dotnet_diagnostic.CS1581.severity = none
+dotnet_diagnostic.CS1582.severity = none
+dotnet_diagnostic.CS1583.severity = none
+dotnet_diagnostic.CS1584.severity = none
+dotnet_diagnostic.CS1587.severity = none
+dotnet_diagnostic.CS1589.severity = none
+dotnet_diagnostic.CS1590.severity = none
+dotnet_diagnostic.CS1592.severity = none
+dotnet_diagnostic.CS1658.severity = none
