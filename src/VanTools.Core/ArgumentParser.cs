@@ -52,17 +52,7 @@ public sealed class ArgumentParser {
                 throw new UsageException($"Unexpected argument '{argument}'.");
             }
 
-            string name;
-            string? value;
-            int separator = argument.IndexOf('=', StringComparison.Ordinal);
-
-            if (separator >= 0) {
-                name = argument[2..separator];
-                value = argument[(separator + 1)..];
-            } else {
-                name = argument[2..];
-                value = null;
-            }
+            (string name, string? value) = SplitOption(argument);
 
             if (options.Find(option => option.Name == name) is null) {
                 throw new UsageException($"Unknown option '--{name}'.");
@@ -83,13 +73,7 @@ public sealed class ArgumentParser {
             values[name] = value;
         }
 
-        string[] missing =
-        [
-            .. options
-                .Where(option => option.IsRequired && !values.ContainsKey(option.Name))
-                .Select(option => $"--{option.Name}")
-        ];
-
+        string[] missing = FindMissingOptions(values);
         if (missing.Length > 0) {
             throw new UsageException($"Missing required option(s): {string.Join(", ", missing)}.");
         }
@@ -101,6 +85,24 @@ public sealed class ArgumentParser {
     // commandName: the name shown in the usage line.
     // description: the one-line command description shown below the usage line.
     // Returns: the help text listing the usage line, the description, every configured option, and "--help".
+    private static (string Name, string? Value) SplitOption(string argument) {
+        int separator = argument.IndexOf('=', StringComparison.Ordinal);
+        if (separator < 0) {
+            return (argument[2..], null);
+        }
+
+        return (argument[2..separator], argument[(separator + 1)..]);
+    }
+
+    private string[] FindMissingOptions(Dictionary<string, string> values) {
+        return
+        [
+            .. options
+                .Where(option => option.IsRequired && !values.ContainsKey(option.Name))
+                .Select(option => $"--{option.Name}")
+        ];
+    }
+
     public string RenderHelp(string commandName, string description) {
         StringBuilder builder = new();
 

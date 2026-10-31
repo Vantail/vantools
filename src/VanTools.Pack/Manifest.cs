@@ -47,11 +47,7 @@ public sealed record Manifest(string Name, string Version, string Entrypoint) {
             string version = RequireString(root, "version");
             string entrypoint = RequireString(root, "entrypoint");
 
-            if (!SemVerPattern.IsMatch(version)) {
-                throw new ManifestException(
-                    $"Manifest member 'version' is not a valid SemVer 2.0.0 version: '{version}'.");
-            }
-
+            ValidateVersion(version);
             ValidateEntrypoint(sourceDirectory, entrypoint);
 
             return new Manifest(name, version, entrypoint);
@@ -72,7 +68,25 @@ public sealed record Manifest(string Name, string Version, string Entrypoint) {
         return text;
     }
 
+    private static void ValidateVersion(string version) {
+        if (SemVerPattern.IsMatch(version)) {
+            return;
+        }
+
+        throw new ManifestException(
+            $"Manifest member 'version' is not a valid SemVer 2.0.0 version: '{version}'.");
+    }
+
     private static void ValidateEntrypoint(string sourceDirectory, string entrypoint) {
+        ThrowIfEntrypointIsUnsafe(entrypoint);
+
+        string entrypointPath = Path.Combine(sourceDirectory, DistDirectoryName, entrypoint);
+        if (!File.Exists(entrypointPath)) {
+            throw new ManifestException($"Manifest entrypoint file not found under dist/: '{entrypoint}'.");
+        }
+    }
+
+    private static void ThrowIfEntrypointIsUnsafe(string entrypoint) {
         if (entrypoint.StartsWith('/') || entrypoint.StartsWith('\\')) {
             throw new ManifestException(
                 $"Manifest member 'entrypoint' must be a relative path: '{entrypoint}'.");
@@ -88,11 +102,6 @@ public sealed record Manifest(string Name, string Version, string Entrypoint) {
                 throw new ManifestException(
                     $"Manifest member 'entrypoint' must not contain '..' segments: '{entrypoint}'.");
             }
-        }
-
-        string entrypointPath = Path.Combine(sourceDirectory, DistDirectoryName, entrypoint);
-        if (!File.Exists(entrypointPath)) {
-            throw new ManifestException($"Manifest entrypoint file not found under dist/: '{entrypoint}'.");
         }
     }
 }
