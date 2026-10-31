@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace VanTools.Pack;
 
+// The validated contents of a manifest.json file: package name, SemVer 2.0.0 version, and entrypoint path relative to dist/.
 public sealed record Manifest(string Name, string Version, string Entrypoint) {
     private const string ManifestFileName = "manifest.json";
     private const string DistDirectoryName = "dist";
@@ -16,6 +17,11 @@ public sealed record Manifest(string Name, string Version, string Entrypoint) {
         "$",
         RegexOptions.CultureInvariant);
 
+    // Loads and validates the manifest.json of a plugin source directory.
+    // sourceDirectory: the directory that contains manifest.json and dist/.
+    // Returns: the validated manifest.
+    // Throws ManifestException: when the file is missing, is not valid JSON, is not a JSON object, has a missing, non-string, or blank member, has a version that is not SemVer 2.0.0, or has an entrypoint that is absolute, carries a drive letter, contains a ".." segment, or does not exist under dist/.
+    // Side effects: reads the manifest file from disk.
     public static Manifest LoadFrom(string sourceDirectory) {
         ArgumentNullException.ThrowIfNull(sourceDirectory);
 
@@ -91,7 +97,9 @@ public sealed record Manifest(string Name, string Version, string Entrypoint) {
     }
 }
 
+// Reports a manifest.json that is missing, unreadable, or invalid.
 public sealed class ManifestException : Exception {
+    // message: the user-facing description of the problem.
     public ManifestException(string message) : base(message) {
     }
 }

@@ -3,6 +3,7 @@ using VanTools.Core;
 
 namespace VanTools.Pack;
 
+// The "pack" subcommand, which turns a plugin source directory into a .van archive.
 public sealed class PackCommand : ICommand {
     private const string ManifestFileName = "manifest.json";
     private const string DistDirectoryName = "dist";
@@ -11,10 +12,16 @@ public sealed class PackCommand : ICommand {
         .Required("s", "source directory")
         .Required("t", "target directory");
 
+    // The subcommand name.
     public string Name => "pack";
 
+    // A one-line description shown in the top-level usage listing.
     public string Description => "Pack a plugin directory into a .van archive.";
 
+    // Packs the source directory into a .van archive in the target directory.
+    // args: the arguments that follow "pack"; expects "--s" and "--t".
+    // Returns: ExitCodes.Success on success, ExitCodes.UsageError for invalid arguments, or ExitCodes.RuntimeError when packing fails.
+    // Side effects: writes the archive file, writes "error:" lines to stderr on failure, and writes a warning to stderr for each skipped node_modules directory.
     public int Execute(string[] args) {
         ParsedArguments parsed;
         try {

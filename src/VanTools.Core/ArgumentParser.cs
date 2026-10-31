@@ -2,13 +2,22 @@ using System.Text;
 
 namespace VanTools.Core;
 
+// Configures and parses the options of a single command.
 public sealed class ArgumentParser {
     private readonly List<OptionDefinition> options = [];
 
+    // The configured options in the order they were declared.
     public IReadOnlyList<OptionDefinition> Options => options;
 
+    // The option summary used in usage lines, for example "--s <value> --t <value>".
     public string UsageLine => string.Join(" ", options.Select(option => $"--{option.Name} <value>"));
 
+    // Declares a required value option.
+    // name: the option name without leading dashes.
+    // description: the text shown for the option in help output.
+    // Returns: this parser, so declarations can be chained.
+    // Throws ArgumentException: when name or description is null, empty, or whitespace.
+    // Throws InvalidOperationException: when the option is already configured.
     public ArgumentParser Required(string name, string description) {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
@@ -22,6 +31,11 @@ public sealed class ArgumentParser {
         return this;
     }
 
+    // Parses the arguments that follow a subcommand name.
+    // args: the arguments to parse; options may appear in any order, and values may be given as "--name value" or "--name=value".
+    // Returns: the parsed option values.
+    // Throws HelpRequestedException: when "--help" or "-h" appears anywhere in args.
+    // Throws UsageException: when an option is unknown, repeated, missing a value, or required and absent, or when an argument does not start with "--".
     public ParsedArguments Parse(string[] args) {
         ArgumentNullException.ThrowIfNull(args);
 
@@ -83,6 +97,10 @@ public sealed class ArgumentParser {
         return new ParsedArguments(values);
     }
 
+    // Renders the help text for a command.
+    // commandName: the name shown in the usage line.
+    // description: the one-line command description shown below the usage line.
+    // Returns: the help text listing the usage line, the description, every configured option, and "--help".
     public string RenderHelp(string commandName, string description) {
         StringBuilder builder = new();
 
@@ -102,4 +120,5 @@ public sealed class ArgumentParser {
     }
 }
 
+// One configured option: its name, the description shown in help output, and whether it must be supplied.
 public sealed record OptionDefinition(string Name, string Description, bool IsRequired);
