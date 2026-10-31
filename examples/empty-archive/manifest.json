@@ -1,5 +1,5 @@
 {
   "name": "empty-archive",
   "version": "0.1.0",
-  "entrypoint": ""
+  "entrypoint": "app.ts"
 }

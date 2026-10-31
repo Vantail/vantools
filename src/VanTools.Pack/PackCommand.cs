@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Text.Json;
 using VanTools.Core;
 
 namespace VanTools.Pack;
@@ -16,41 +15,21 @@ public sealed class PackCommand : ICommand {
         }
 
         string manifestPath = Path.Combine(sourceDirectory, ManifestFileName);
-        if (!File.Exists(manifestPath)) {
-            Console.Error.WriteLine($"pack: manifest not found at '{manifestPath}'.");
-            return 1;
-        }
-
-        string? name;
-        string? version;
-        try {
-            using JsonDocument manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
-            name = ReadStringMember(manifest.RootElement, "name");
-            version = ReadStringMember(manifest.RootElement, "version");
-            // Read for completeness; entrypoint is not validated in this task.
-            _ = ReadStringMember(manifest.RootElement, "entrypoint");
-        } catch (JsonException exception) {
-            Console.Error.WriteLine($"pack: invalid manifest JSON: {exception.Message}");
-            return 1;
-        }
-
-        if (string.IsNullOrEmpty(name)) {
-            Console.Error.WriteLine("pack: manifest member 'name' is missing or empty.");
-            return 1;
-        }
-
-        if (string.IsNullOrEmpty(version)) {
-            Console.Error.WriteLine("pack: manifest member 'version' is missing or empty.");
-            return 1;
-        }
-
         string distDirectory = Path.Combine(sourceDirectory, DistDirectoryName);
-        if (!Directory.Exists(distDirectory)) {
-            Console.Error.WriteLine($"pack: dist directory not found at '{distDirectory}'.");
+        Manifest manifest;
+
+        try {
+            if (!Directory.Exists(distDirectory)) {
+                throw new ManifestException($"dist directory not found at '{distDirectory}'.");
+            }
+
+            manifest = Manifest.LoadFrom(sourceDirectory);
+        } catch (ManifestException exception) {
+            Console.Error.WriteLine($"error: {exception.Message}");
             return 1;
         }
 
-        string archiveName = $"{name}-{version}.van";
+        string archiveName = $"{manifest.Name}-{manifest.Version}.van";
         Directory.CreateDirectory(targetDirectory);
         string archivePath = Path.Combine(targetDirectory, archiveName);
 
@@ -105,18 +84,6 @@ public sealed class PackCommand : ICommand {
         }
 
         return true;
-    }
-
-    private static string? ReadStringMember(JsonElement root, string memberName) {
-        if (root.ValueKind != JsonValueKind.Object) {
-            return null;
-        }
-
-        if (!root.TryGetProperty(memberName, out JsonElement value) || value.ValueKind != JsonValueKind.String) {
-            return null;
-        }
-
-        return value.GetString();
     }
 
     private static void PrintUsage() {

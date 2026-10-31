@@ -27,6 +27,7 @@ public sealed class PackCommandTests {
 
         Assert.Contains("manifest.json", entryNames);
         Assert.Contains("dist/.gitkeep", entryNames);
+        Assert.Contains("dist/app.ts", entryNames);
     }
 
     private static string FindRepositoryRoot() {
