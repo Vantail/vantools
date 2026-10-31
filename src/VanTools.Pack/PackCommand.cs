@@ -17,6 +17,7 @@ public sealed class PackCommand : ICommand {
         string manifestPath = Path.Combine(sourceDirectory, ManifestFileName);
         string distDirectory = Path.Combine(sourceDirectory, DistDirectoryName);
         Manifest manifest;
+        IReadOnlyList<PathEntry> distEntries;
 
         try {
             if (!Directory.Exists(distDirectory)) {
@@ -24,7 +25,8 @@ public sealed class PackCommand : ICommand {
             }
 
             manifest = Manifest.LoadFrom(sourceDirectory);
-        } catch (ManifestException exception) {
+            distEntries = PathSafety.BuildEntries(distDirectory, Console.Error);
+        } catch (Exception exception) when (exception is ManifestException or PathSafetyException) {
             Console.Error.WriteLine($"error: {exception.Message}");
             return 1;
         }
@@ -38,9 +40,8 @@ public sealed class PackCommand : ICommand {
 
         archive.CreateEntryFromFile(manifestPath, ManifestFileName, CompressionLevel.Optimal);
 
-        foreach (string file in Directory.EnumerateFiles(distDirectory, "*", SearchOption.AllDirectories)) {
-            string relativePath = Path.GetRelativePath(distDirectory, file).Replace('\\', '/');
-            archive.CreateEntryFromFile(file, $"{DistDirectoryName}/{relativePath}", CompressionLevel.Optimal);
+        foreach (PathEntry entry in distEntries) {
+            archive.CreateEntryFromFile(entry.FullPath, entry.EntryName, CompressionLevel.Optimal);
         }
 
         return 0;
