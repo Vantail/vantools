@@ -133,6 +133,23 @@ public sealed class VerifyCommandTests {
     }
 
     [Fact]
+    public void Verify_OversizedManifest_ReturnsRuntimeErrorBeforeParsing() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(
+            temp,
+            "my-plugin-0.1.0.van",
+            new string(' ', (1024 * 1024) + 1),
+            [("dist/app.ts", "// app")]);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains("limit is 1048576", result.StandardError);
+        Assert.DoesNotContain("Invalid JSON format", result.StandardError);
+    }
+
+    [Fact]
     public void Verify_NodeModulesAtRoot_ReturnsRuntimeError() {
         using TempDirectory temp = new();
         string archivePath = CreateArchive(

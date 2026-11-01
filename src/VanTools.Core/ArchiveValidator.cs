@@ -8,6 +8,7 @@ public static class ArchiveValidator {
     private const string ManifestFileName = "manifest.json";
     private const string DistDirectoryName = "dist";
     private const string NodeModulesDirectoryName = "node_modules";
+    private const int MaxManifestBytes = 1024 * 1024;
 
     // Validates the archive at the given path.
     // archivePath: the path to the .van archive.
@@ -42,9 +43,17 @@ public static class ArchiveValidator {
             return [$"{ManifestFileName} not found in archive root."];
         }
 
+        if (manifestEntry.Length > MaxManifestBytes) {
+            return [DescribeOversizedManifest(manifestEntry.Length)];
+        }
+
         string jsonContent;
-        using (Stream stream = manifestEntry.Open())
-        using (StreamReader reader = new(stream, Encoding.UTF8)) {
+        using (Stream stream = manifestEntry.Open()) {
+            if (!TryReadBounded(stream, out byte[] bytes)) {
+                return [$"manifest.json is larger than the {MaxManifestBytes}-byte limit."];
+            }
+
+            using StreamReader reader = new(new MemoryStream(bytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
             jsonContent = reader.ReadToEnd();
         }
 
@@ -55,6 +64,36 @@ public static class ArchiveValidator {
         CollectEntrypointErrors(archive, manifest, errors);
 
         return errors;
+    }
+
+    // Reads an entry stream, refusing to buffer more than the manifest limit.
+    // stream: the entry stream to read.
+    // bytes: the entry content when it fits within the limit.
+    // Returns: true when the content fits; otherwise false.
+    private static bool TryReadBounded(Stream stream, out byte[] bytes) {
+        using MemoryStream buffer = new();
+        byte[] chunk = new byte[81920];
+        int read;
+
+        while ((read = stream.Read(chunk, 0, chunk.Length)) > 0) {
+            if (buffer.Length + read > MaxManifestBytes) {
+                bytes = [];
+                return false;
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        bytes = buffer.ToArray();
+
+        return true;
+    }
+
+    // Describes an oversized manifest using the size declared in the archive.
+    // length: the declared uncompressed size in bytes.
+    // Returns: the error message.
+    private static string DescribeOversizedManifest(long length) {
+        return $"manifest.json is {length} bytes; the limit is {MaxManifestBytes}.";
     }
 
     // Records a message when the archive filename is not "<name>-<version>.van" as derived from the manifest.
