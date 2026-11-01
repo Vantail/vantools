@@ -20,8 +20,8 @@ public static class ArchiveExtractor {
     // Replaces the target directory with the contents of the archive.
     // archivePath: the path to the .van archive.
     // targetDir: the directory that receives the extracted files; existing contents are removed.
-    // Throws InvalidOperationException: when targetDir is a filesystem root, the current working directory or one of its ancestors, or an existing file, or when an entry resolves outside targetDir.
-    // Side effects: deletes and recreates targetDir, then writes the extracted files.
+    // Throws InvalidOperationException: when targetDir is a filesystem root, the current working directory or one of its ancestors, or an existing file, when targetDir contains archivePath, or when an entry resolves outside targetDir.
+    // Side effects: opens the archive, deletes and recreates targetDir, then writes the extracted files.
     public static void Extract(string archivePath, string targetDir) {
         ArgumentNullException.ThrowIfNull(archivePath);
         ArgumentNullException.ThrowIfNull(targetDir);
@@ -38,18 +38,27 @@ public static class ArchiveExtractor {
                 "Refusing to use a directory that contains the current working directory as the target.");
         }
 
+        string resolvedSource = Path.GetFullPath(archivePath);
+        if (resolvedSource.StartsWith(
+                resolvedTarget + Path.DirectorySeparatorChar,
+                DirectoryPathComparison)) {
+            throw new InvalidOperationException(
+                $"Refusing to use '{targetDir}' as the target because it contains the source archive '{archivePath}'.");
+        }
+
         if (File.Exists(resolvedTarget)) {
             throw new InvalidOperationException(
                 $"The target path '{targetDir}' exists but is a file, not a directory.");
         }
+
+        // Open the archive before wiping the target, so its input survives any failure during extraction.
+        using ZipArchive archive = ZipFile.OpenRead(archivePath);
 
         if (Directory.Exists(resolvedTarget)) {
             Directory.Delete(resolvedTarget, recursive: true);
         }
 
         Directory.CreateDirectory(resolvedTarget);
-
-        using ZipArchive archive = ZipFile.OpenRead(archivePath);
 
         long totalBytes = 0;
         foreach (ZipArchiveEntry entry in archive.Entries) {

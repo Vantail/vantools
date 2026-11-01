@@ -53,6 +53,22 @@ public sealed class UnpackCommandTests {
     }
 
     [Fact]
+    public void Unpack_SourceArchiveInsideTarget_ReturnsRuntimeErrorAndKeepsArchive() {
+        using TempDirectory temp = new();
+        string target = temp.Combine("target");
+        Directory.CreateDirectory(target);
+        string archivePath = CreateArchive(temp, target);
+
+        UnpackResult result = Unpack(archivePath, target);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains("because it contains the source archive", result.StandardError);
+        Assert.True(File.Exists(archivePath));
+        Assert.Equal(["sample-0.1.0.van"], SnapshotTarget(target));
+    }
+
+    [Fact]
     public void Unpack_TargetIsFile_ReturnsRuntimeError() {
         using TempDirectory temp = new();
         string archivePath = CreateArchive(temp);
@@ -189,8 +205,8 @@ public sealed class UnpackCommandTests {
         ];
     }
 
-    private static string CreateArchive(TempDirectory temp) {
-        string archivePath = temp.Combine("sample-0.1.0.van");
+    private static string CreateArchive(TempDirectory temp, string? directory = null) {
+        string archivePath = Path.Combine(directory ?? temp.FullPath, "sample-0.1.0.van");
 
         using (FileStream stream = new(archivePath, FileMode.Create, FileAccess.Write))
         using (ZipArchive archive = new(stream, ZipArchiveMode.Create)) {
