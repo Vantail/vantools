@@ -117,6 +117,16 @@ public sealed class ManifestValidationTests : IDisposable {
     }
 
     [Fact]
+    public void LoadFrom_OversizedManifest_ThrowsWithoutReadingIt() {
+        WriteManifest(new string(' ', (1024 * 1024) + 1));
+        WriteEntrypoint();
+
+        ManifestException exception = Assert.Throws<ManifestException>(() => Manifest.LoadFrom(sourceDirectory));
+
+        Assert.Contains("the limit is 1048576.", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void LoadFrom_MissingVersion_Throws() {
         WriteManifest("""{ "name": "example", "entrypoint": "app.ts" }""");
         WriteEntrypoint();

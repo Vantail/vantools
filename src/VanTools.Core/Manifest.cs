@@ -1,9 +1,12 @@
+using System.Text;
+
 namespace VanTools.Core;
 
 // The validated contents of a manifest.json file: package name, SemVer 2.0.0 version, and entrypoint path relative to dist/.
 public sealed record Manifest(string Name, string Version, string Entrypoint) {
     private const string ManifestFileName = "manifest.json";
     private const string DistDirectoryName = "dist";
+    private const int MaxManifestBytes = 1024 * 1024;
 
     // Loads and validates the manifest.json of a plugin source directory.
     // sourceDirectory: the directory that contains manifest.json and dist/.
@@ -18,7 +21,18 @@ public sealed record Manifest(string Name, string Version, string Entrypoint) {
             throw new ManifestException($"manifest.json not found at '{manifestPath}'.");
         }
 
-        List<string> errors = ManifestValidator.Validate(File.ReadAllText(manifestPath), out Manifest? manifest);
+        using FileStream stream = new(manifestPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (stream.Length > MaxManifestBytes) {
+            throw new ManifestException(
+                $"manifest.json is {stream.Length} bytes; the limit is {MaxManifestBytes}.");
+        }
+
+        string jsonContent;
+        using (StreamReader reader = new(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true)) {
+            jsonContent = reader.ReadToEnd();
+        }
+
+        List<string> errors = ManifestValidator.Validate(jsonContent, out Manifest? manifest);
 
         if (manifest is null) {
             if (errors.Count == 0) {
