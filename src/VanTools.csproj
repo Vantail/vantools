@@ -8,11 +8,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="VanTools.Core\**;VanTools.Pack\**" />
+    <Compile Remove="VanTools.Core\**;VanTools.Pack\**;VanTools.Unpack\**;VanTools.Verify\**" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="VanTools.Pack\VanTools.Pack.csproj" />
+    <ProjectReference Include="VanTools.Unpack\VanTools.Unpack.csproj" />
+    <ProjectReference Include="VanTools.Verify\VanTools.Verify.csproj" />
   </ItemGroup>
 
 </Project>

@@ -30,7 +30,7 @@ public sealed class PackCommand : ICommand {
             Console.Out.Write(Parser.RenderHelp(Name, Description));
             return ExitCodes.Success;
         } catch (UsageException exception) {
-            Console.Error.WriteLine($"error: {exception.Message}");
+            ErrorWriter.Write(exception.Message);
             Console.Error.WriteLine($"Usage: {Name} {Parser.UsageLine}");
             return ExitCodes.UsageError;
         }
@@ -40,8 +40,14 @@ public sealed class PackCommand : ICommand {
 
         try {
             return Pack(sourceDirectory, targetDirectory);
+        } catch (ManifestException exception) {
+            foreach (string error in exception.Errors) {
+                ErrorWriter.Write(error);
+            }
+
+            return ExitCodes.RuntimeError;
         } catch (Exception exception) {
-            Console.Error.WriteLine($"error: {exception.Message}");
+            ErrorWriter.Write(exception.Message);
             return ExitCodes.RuntimeError;
         }
     }
