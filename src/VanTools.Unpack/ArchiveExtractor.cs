@@ -1,0 +1,99 @@
+using System.IO.Compression;
+
+namespace VanTools.Unpack;
+
+// Writes a .van archive into a target directory, refusing unsafe targets and unsafe entry paths.
+public static class ArchiveExtractor {
+    private static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
+        ? StringComparison.OrdinalIgnoreCase
+        : StringComparison.Ordinal;
+
+    // Directory paths compare case-insensitively on Windows and macOS, whose default file systems ignore case.
+    private static readonly StringComparison DirectoryPathComparison =
+        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+    // Replaces the target directory with the contents of the archive.
+    // archivePath: the path to the .van archive.
+    // targetDir: the directory that receives the extracted files; existing contents are removed.
+    // Throws InvalidOperationException: when targetDir is a filesystem root, the current working directory, or an existing file, or when an entry resolves outside targetDir.
+    // Side effects: deletes and recreates targetDir, then writes the extracted files.
+    public static void Extract(string archivePath, string targetDir) {
+        ArgumentNullException.ThrowIfNull(archivePath);
+        ArgumentNullException.ThrowIfNull(targetDir);
+
+        string resolvedTarget = Path.TrimEndingDirectorySeparator(Path.GetFullPath(targetDir));
+
+        if (IsRootOrCurrentDirectory(resolvedTarget)) {
+            throw new InvalidOperationException(
+                "Refusing to use a root directory or the current working directory as the target.");
+        }
+
+        if (File.Exists(resolvedTarget)) {
+            throw new InvalidOperationException(
+                $"The target path '{targetDir}' exists but is a file, not a directory.");
+        }
+
+        if (Directory.Exists(resolvedTarget)) {
+            Directory.Delete(resolvedTarget, recursive: true);
+        }
+
+        Directory.CreateDirectory(resolvedTarget);
+
+        using ZipArchive archive = ZipFile.OpenRead(archivePath);
+
+        foreach (ZipArchiveEntry entry in archive.Entries) {
+            ExtractEntry(entry, resolvedTarget);
+        }
+    }
+
+    // Extracts one archive entry into the target directory.
+    // entry: the archive entry to write.
+    // targetDir: the directory that receives the entry; it must already exist.
+    // Throws InvalidOperationException: when the entry would be written outside the target directory.
+    // Side effects: creates directories and writes the entry under targetDir.
+    internal static void ExtractEntry(ZipArchiveEntry entry, string targetDir) {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(targetDir);
+
+        string fullTargetDir = Path.GetFullPath(targetDir);
+        string destinationPath = Path.GetFullPath(Path.Combine(fullTargetDir, entry.FullName));
+
+        // Defense in depth: the validator rejects unsafe names, but refuse to write outside the target directory regardless.
+        if (!destinationPath.StartsWith(fullTargetDir + Path.DirectorySeparatorChar, PathComparison)) {
+            throw new InvalidOperationException($"Zip-Slip detected for entry: '{entry.FullName}'");
+        }
+
+        if (entry.FullName.EndsWith('/')) {
+            Directory.CreateDirectory(destinationPath);
+            return;
+        }
+
+        string? parentDirectory = Path.GetDirectoryName(destinationPath);
+        if (!string.IsNullOrEmpty(parentDirectory)) {
+            Directory.CreateDirectory(parentDirectory);
+        }
+
+        entry.ExtractToFile(destinationPath, overwrite: true);
+    }
+
+    // Reports whether the resolved path is a filesystem root or the current working directory.
+    // resolvedTarget: the absolute target path, without a trailing directory separator.
+    // Returns: true when deleting the path could remove a root or the working directory.
+    private static bool IsRootOrCurrentDirectory(string resolvedTarget) {
+        string? root = Path.GetPathRoot(resolvedTarget);
+        if (root is not null
+            && string.Equals(
+                resolvedTarget,
+                Path.TrimEndingDirectorySeparator(root),
+                DirectoryPathComparison)) {
+            return true;
+        }
+
+        string currentDirectory = Path.TrimEndingDirectorySeparator(
+            Path.GetFullPath(Environment.CurrentDirectory));
+
+        return string.Equals(resolvedTarget, currentDirectory, DirectoryPathComparison);
+    }
+}
