@@ -59,6 +59,7 @@ public static class ArchiveValidator {
 
         List<string> errors = ManifestValidator.Validate(jsonContent, out Manifest? manifest);
         CollectEntryNameErrors(archive, errors);
+        CollectFileTypeErrors(archive, errors);
         CollectFilenameErrors(archivePath, manifest, errors);
         CollectDistErrors(archive, errors);
         CollectNodeModulesErrors(archive, errors);
@@ -105,6 +106,28 @@ public static class ArchiveValidator {
             if (TryDescribeUnsafeName(entry.FullName, out string reason)) {
                 errors.Add($"The archive entry '{entry.FullName}' {reason}.");
             }
+        }
+    }
+
+    // Records one message per entry whose stored Unix mode is not a regular file or directory.
+    // archive: the opened archive.
+    // errors: the list that receives the problem descriptions.
+    private static void CollectFileTypeErrors(ZipArchive archive, List<string> errors) {
+        foreach (ZipArchiveEntry entry in archive.Entries) {
+            int mode = (int)((uint)entry.ExternalAttributes >> 16) & 0xFFFF;
+
+            // Entries without a Unix mode (for example, DOS-created ones) cannot be classified this way.
+            if (mode == 0) {
+                continue;
+            }
+
+            int fileType = mode & 0xF000;
+            if (fileType is 0x8000 or 0x4000) {
+                continue;
+            }
+
+            errors.Add(
+                $"The archive entry '{entry.FullName}' is not a regular file or directory (Unix mode 0x{mode:X4}).");
         }
     }
 

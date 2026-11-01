@@ -204,6 +204,34 @@ public sealed class VerifyCommandTests {
         Assert.Contains("The 'dist/' directory is missing from the archive root.", result.StandardError);
     }
 
+    [Theory]
+    [InlineData(0xA1FF)] // symbolic link
+    [InlineData(0x11A4)] // FIFO
+    [InlineData(0x21A4)] // character device
+    [InlineData(0xC1FF)] // socket
+    public void Verify_NonRegularEntryType_ReturnsRuntimeError(int unixMode) {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchiveWithEntryMode(temp, "dist/app.ts", unixMode);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains("The archive entry 'dist/app.ts' is not a regular file or directory", result.StandardError);
+    }
+
+    [Fact]
+    public void Verify_RegularEntryMode_ReturnsSuccess() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchiveWithEntryMode(temp, "dist/app.ts", 0x81A4);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Equal("OK" + Environment.NewLine, result.StandardOut);
+        Assert.Empty(result.StandardError);
+    }
+
     [Fact]
     public void Verify_NodeModulesAtRoot_ReturnsRuntimeError() {
         using TempDirectory temp = new();
@@ -407,6 +435,28 @@ public sealed class VerifyCommandTests {
                     writer.Write(content);
                 }
             }
+        }
+
+        return archivePath;
+    }
+
+    private static string CreateArchiveWithEntryMode(
+        TempDirectory temp,
+        string entryName,
+        int unixMode) {
+        string archivePath = temp.Combine("my-plugin-0.1.0.van");
+
+        using (FileStream stream = new(archivePath, FileMode.Create, FileAccess.Write))
+        using (ZipArchive archive = new(stream, ZipArchiveMode.Create)) {
+            ZipArchiveEntry manifestEntry = archive.CreateEntry("manifest.json", CompressionLevel.Optimal);
+            using (StreamWriter writer = new(manifestEntry.Open())) {
+                writer.Write(ValidManifest);
+            }
+
+            ZipArchiveEntry entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
+            entry.ExternalAttributes = unchecked((int)((uint)unixMode << 16));
+            using StreamWriter entryWriter = new(entry.Open());
+            entryWriter.Write("../../../../etc/passwd");
         }
 
         return archivePath;
