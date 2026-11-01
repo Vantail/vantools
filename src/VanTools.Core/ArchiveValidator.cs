@@ -60,6 +60,7 @@ public static class ArchiveValidator {
         List<string> errors = ManifestValidator.Validate(jsonContent, out Manifest? manifest);
         CollectEntryNameErrors(archive, errors);
         CollectFileTypeErrors(archive, errors);
+        CollectDuplicateEntryErrors(archive, errors);
         CollectFilenameErrors(archivePath, manifest, errors);
         CollectDistErrors(archive, errors);
         CollectNodeModulesErrors(archive, errors);
@@ -190,6 +191,20 @@ public static class ArchiveValidator {
         reason = string.Empty;
 
         return false;
+    }
+
+    // Records one message for each entry name that occurs more than once in the archive.
+    // archive: the opened archive.
+    // errors: the list that receives the problem descriptions.
+    private static void CollectDuplicateEntryErrors(ZipArchive archive, List<string> errors) {
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        HashSet<string> reported = new(StringComparer.Ordinal);
+
+        foreach (ZipArchiveEntry entry in archive.Entries) {
+            if (!seen.Add(entry.FullName) && reported.Add(entry.FullName)) {
+                errors.Add($"The archive contains duplicate entries named '{entry.FullName}'.");
+            }
+        }
     }
 
     // Records a message when the archive filename is not "<name>-<version>.van" as derived from the manifest.

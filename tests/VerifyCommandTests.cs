@@ -233,6 +233,38 @@ public sealed class VerifyCommandTests {
     }
 
     [Fact]
+    public void Verify_DuplicateManifestEntries_ReturnsRuntimeError() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchiveWithEntries(
+            temp,
+            ("manifest.json", ValidManifest),
+            ("manifest.json", """{ "name": "my-plugin", "version": "0.1.0", "entrypoint": "../../../etc/passwd" }"""),
+            ("dist/app.ts", "// app"));
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains("The archive contains duplicate entries named 'manifest.json'.", result.StandardError);
+    }
+
+    [Fact]
+    public void Verify_DuplicateEntrypointEntries_ReturnsRuntimeError() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchiveWithEntries(
+            temp,
+            ("manifest.json", ValidManifest),
+            ("dist/app.ts", "// app"),
+            ("dist/app.ts", "// attacker"));
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains("The archive contains duplicate entries named 'dist/app.ts'.", result.StandardError);
+    }
+
+    [Fact]
     public void Verify_NodeModulesAtRoot_ReturnsRuntimeError() {
         using TempDirectory temp = new();
         string archivePath = CreateArchive(
@@ -457,6 +489,23 @@ public sealed class VerifyCommandTests {
             entry.ExternalAttributes = unchecked((int)((uint)unixMode << 16));
             using StreamWriter entryWriter = new(entry.Open());
             entryWriter.Write("../../../../etc/passwd");
+        }
+
+        return archivePath;
+    }
+
+    private static string CreateArchiveWithEntries(
+        TempDirectory temp,
+        params (string Name, string Content)[] entries) {
+        string archivePath = temp.Combine("my-plugin-0.1.0.van");
+
+        using (FileStream stream = new(archivePath, FileMode.Create, FileAccess.Write))
+        using (ZipArchive archive = new(stream, ZipArchiveMode.Create)) {
+            foreach ((string name, string content) in entries) {
+                ZipArchiveEntry entry = archive.CreateEntry(name, CompressionLevel.Optimal);
+                using StreamWriter writer = new(entry.Open());
+                writer.Write(content);
+            }
         }
 
         return archivePath;
