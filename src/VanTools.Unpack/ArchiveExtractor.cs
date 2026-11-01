@@ -4,6 +4,9 @@ namespace VanTools.Unpack;
 
 // Writes a .van archive into a target directory, refusing unsafe targets and unsafe entry paths.
 public static class ArchiveExtractor {
+    private const long MaxEntryBytes = 256L * 1024 * 1024;
+    private const long MaxTotalBytes = 1024L * 1024 * 1024;
+
     private static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
         ? StringComparison.OrdinalIgnoreCase
         : StringComparison.Ordinal;
@@ -43,8 +46,21 @@ public static class ArchiveExtractor {
 
         using ZipArchive archive = ZipFile.OpenRead(archivePath);
 
+        long totalBytes = 0;
         foreach (ZipArchiveEntry entry in archive.Entries) {
-            ExtractEntry(entry, resolvedTarget);
+            long remaining = MaxTotalBytes - totalBytes;
+            if (entry.Length > MaxEntryBytes) {
+                throw new InvalidOperationException(
+                    $"Entry '{entry.FullName}' exceeds the size limit of {MaxEntryBytes} bytes.");
+            }
+
+            if (entry.Length > remaining) {
+                throw new InvalidOperationException(
+                    $"Extracting the archive would exceed the total size limit of {MaxTotalBytes} bytes.");
+            }
+
+            // The declared size is untrusted, so the copy itself is also bounded.
+            totalBytes += ExtractEntryCore(entry, resolvedTarget, Math.Min(MaxEntryBytes, remaining));
         }
     }
 
@@ -54,6 +70,20 @@ public static class ArchiveExtractor {
     // Throws InvalidOperationException: when the entry would be written outside the target directory.
     // Side effects: creates directories and writes the entry under targetDir.
     internal static void ExtractEntry(ZipArchiveEntry entry, string targetDir) {
+        ExtractEntryCore(entry, targetDir, MaxEntryBytes);
+    }
+
+    // Extracts one archive entry with an explicit uncompressed byte budget, used by tests to exercise the limit.
+    // entry: the archive entry to write.
+    // targetDir: the directory that receives the entry; it must already exist.
+    // maxBytes: the maximum number of bytes that may be written for this entry.
+    // Throws InvalidOperationException: when the entry would be written outside the target directory or exceeds maxBytes.
+    // Side effects: creates directories and writes the entry under targetDir; removes a partial file on failure.
+    internal static void ExtractEntry(ZipArchiveEntry entry, string targetDir, long maxBytes) {
+        ExtractEntryCore(entry, targetDir, maxBytes);
+    }
+
+    private static long ExtractEntryCore(ZipArchiveEntry entry, string targetDir, long maxBytes) {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(targetDir);
 
@@ -67,7 +97,7 @@ public static class ArchiveExtractor {
 
         if (entry.FullName.EndsWith('/')) {
             Directory.CreateDirectory(destinationPath);
-            return;
+            return 0;
         }
 
         string? parentDirectory = Path.GetDirectoryName(destinationPath);
@@ -75,7 +105,43 @@ public static class ArchiveExtractor {
             Directory.CreateDirectory(parentDirectory);
         }
 
-        entry.ExtractToFile(destinationPath, overwrite: true);
+        long written = 0;
+        try {
+            using Stream source = entry.Open();
+            using FileStream destination = new(
+                destinationPath, FileMode.Create, FileAccess.Write, FileShare.None);
+
+            byte[] buffer = new byte[81920];
+            int read;
+            while ((read = source.Read(buffer, 0, buffer.Length)) > 0) {
+                written += read;
+                if (written > maxBytes) {
+                    throw new InvalidOperationException(
+                        $"Entry '{entry.FullName}' exceeds the size limit of {maxBytes} bytes.");
+                }
+
+                destination.Write(buffer, 0, read);
+            }
+        } catch {
+            TryDeletePartialFile(destinationPath);
+            throw;
+        }
+
+        return written;
+    }
+
+    // Removes a partially written entry after extraction fails, ignoring cleanup errors that would mask the cause.
+    // path: the file to remove.
+    private static void TryDeletePartialFile(string path) {
+        try {
+            if (File.Exists(path)) {
+                File.Delete(path);
+            }
+        } catch (IOException) {
+            // The original extraction error is the one worth reporting.
+        } catch (UnauthorizedAccessException) {
+            // The original extraction error is the one worth reporting.
+        }
     }
 
     // Reports whether the resolved path is a filesystem root or the current working directory.

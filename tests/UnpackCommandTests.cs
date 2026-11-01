@@ -133,6 +133,23 @@ public sealed class UnpackCommandTests {
         Assert.Equal("// app", File.ReadAllText(extractedPath));
     }
 
+    [Fact]
+    public void ExtractEntry_ExceedingByteLimit_ThrowsAndRemovesPartialFile() {
+        using TempDirectory temp = new();
+        string archivePath = CreateSingleEntryArchive(temp, "dist/big.bin", new string('a', 4096));
+        string target = temp.Combine("target");
+        Directory.CreateDirectory(target);
+
+        using ZipArchive archive = ZipFile.OpenRead(archivePath);
+        ZipArchiveEntry entry = Assert.Single(archive.Entries);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => ArchiveExtractor.ExtractEntry(entry, target, maxBytes: 1024));
+
+        Assert.Contains("exceeds the size limit", exception.Message);
+        Assert.False(File.Exists(Path.Combine(target, "dist", "big.bin")));
+    }
+
     // The file system reports platform-specific separators; compare against forward slashes on every platform.
     private static string[] SnapshotTarget(string targetDirectory) {
         return
