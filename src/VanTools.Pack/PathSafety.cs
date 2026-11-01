@@ -40,6 +40,26 @@ public static class PathSafety {
         return entries;
     }
 
+    // Opens a dist file for archiving and re-checks that the path is still a regular file.
+    // entry: the entry produced by BuildEntries.
+    // Returns: an open read-only stream; the caller owns it and must dispose it.
+    // Throws PathSafetyException: when the path is now a symbolic link or other non-regular file.
+    // Side effects: opens the file.
+    public static FileStream OpenRegularFile(PathEntry entry) {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        // Open first, so the bytes that are archived come from the handle rather than a second path lookup.
+        FileStream stream = new(entry.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        try {
+            ThrowIfNotRegular(new FileInfo(entry.FullPath));
+
+            return stream;
+        } catch {
+            stream.Dispose();
+            throw;
+        }
+    }
+
     // Reports whether an archive entry name satisfies the spec path rules.
     // entryName: the entry name to check.
     // reason: the reason for rejection when the result is false; otherwise an empty string.

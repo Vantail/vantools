@@ -85,7 +85,11 @@ public sealed class PackCommand : ICommand {
         archive.CreateEntryFromFile(manifestPath, ManifestFileName, CompressionLevel.Optimal);
 
         foreach (PathEntry entry in distEntries) {
-            archive.CreateEntryFromFile(entry.FullPath, entry.EntryName, CompressionLevel.Optimal);
+            // Copy from the handle that was validated, instead of re-opening the path inside CreateEntryFromFile.
+            using FileStream source = PathSafety.OpenRegularFile(entry);
+            ZipArchiveEntry archiveEntry = archive.CreateEntry(entry.EntryName, CompressionLevel.Optimal);
+            using Stream destination = archiveEntry.Open();
+            source.CopyTo(destination);
         }
 
         return ExitCodes.Success;

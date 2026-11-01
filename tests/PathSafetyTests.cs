@@ -114,6 +114,30 @@ public sealed class PathSafetyTests : IDisposable {
     }
 
     [Fact]
+    public void OpenRegularFile_RegularFile_ReturnsItsContent() {
+        File.WriteAllText(DistPath("content.txt"), "payload");
+        PathEntry entry = new("dist/content.txt", DistPath("content.txt"));
+
+        using FileStream stream = PathSafety.OpenRegularFile(entry);
+        using StreamReader reader = new(stream);
+
+        Assert.Equal("payload", reader.ReadToEnd());
+    }
+
+    [Fact]
+    public void OpenRegularFile_Symlink_IsRejected() {
+        WriteDistFile("target.txt");
+        string linkPath = DistPath("link.txt");
+        if (!TryCreateSymlink(linkPath, "target.txt")) {
+            return;
+        }
+
+        PathEntry entry = new("dist/link.txt", linkPath);
+
+        Assert.Throws<PathSafetyException>(() => PathSafety.OpenRegularFile(entry));
+    }
+
+    [Fact]
     public void Pack_CaseInsensitiveDuplicates_AreRejected() {
         WriteDistFile("Foo.ts");
         WriteDistFile("foo.ts");
