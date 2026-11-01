@@ -35,7 +35,7 @@ public static class PathSafety {
         List<PathEntry> entries = [];
         Dictionary<string, string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-        Walk(new DirectoryInfo(distDirectory), "dist", entries, seen, warnings);
+        Walk(distDirectory, entries, seen, warnings);
 
         return entries;
     }
@@ -69,39 +69,51 @@ public static class PathSafety {
     }
 
     private static void Walk(
-        DirectoryInfo directory,
-        string archivePrefix,
+        string distDirectory,
         List<PathEntry> entries,
         Dictionary<string, string> seen,
         TextWriter warnings) {
-        foreach (FileSystemInfo child in directory
-                     .EnumerateFileSystemInfos()
-                     .OrderBy(info => info.Name, StringComparer.Ordinal)) {
-            ThrowIfNotRegular(child);
-            ThrowIfNotNfc(child);
+        // An explicit work list keeps directory depth off the CLR stack, so a deeply nested tree cannot overflow it.
+        Stack<(DirectoryInfo Directory, string ArchivePrefix)> pending = new();
+        pending.Push((new DirectoryInfo(distDirectory), "dist"));
 
-            if (child is DirectoryInfo
-                && string.Equals(child.Name, NodeModulesDirectoryName, StringComparison.Ordinal)) {
-                warnings.WriteLine(NodeModulesWarning);
-                continue;
+        while (pending.Count > 0) {
+            (DirectoryInfo directory, string archivePrefix) = pending.Pop();
+            List<(DirectoryInfo Directory, string ArchivePrefix)> nestedDirectories = [];
+
+            foreach (FileSystemInfo child in directory
+                         .EnumerateFileSystemInfos()
+                         .OrderBy(info => info.Name, StringComparer.Ordinal)) {
+                ThrowIfNotRegular(child);
+                ThrowIfNotNfc(child);
+
+                if (child is DirectoryInfo
+                    && string.Equals(child.Name, NodeModulesDirectoryName, StringComparison.Ordinal)) {
+                    warnings.WriteLine(NodeModulesWarning);
+                    continue;
+                }
+
+                string entryName = $"{archivePrefix}/{child.Name}";
+                if (!IsSafeArchivePath(entryName, out string reason)) {
+                    throw new PathSafetyException(
+                        $"Archive entry '{entryName}' derived from '{child.FullName}' {reason}.");
+                }
+
+                if (child is DirectoryInfo nestedDirectory) {
+                    nestedDirectories.Add((nestedDirectory, entryName));
+                    continue;
+                }
+
+                FileInfo file = child as FileInfo
+                    ?? throw new PathSafetyException(
+                        $"Unsupported file system entry (not a regular file or directory): '{child.FullName}'.");
+
+                AddEntry(entries, seen, entryName, file);
             }
 
-            string entryName = $"{archivePrefix}/{child.Name}";
-            if (!IsSafeArchivePath(entryName, out string reason)) {
-                throw new PathSafetyException(
-                    $"Archive entry '{entryName}' derived from '{child.FullName}' {reason}.");
+            for (int index = nestedDirectories.Count - 1; index >= 0; index--) {
+                pending.Push(nestedDirectories[index]);
             }
-
-            if (child is DirectoryInfo nestedDirectory) {
-                Walk(nestedDirectory, entryName, entries, seen, warnings);
-                continue;
-            }
-
-            FileInfo file = child as FileInfo
-                ?? throw new PathSafetyException(
-                    $"Unsupported file system entry (not a regular file or directory): '{child.FullName}'.");
-
-            AddEntry(entries, seen, entryName, file);
         }
     }
 

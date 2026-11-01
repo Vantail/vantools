@@ -61,6 +61,30 @@ public sealed class PathSafetyTests : IDisposable {
     }
 
     [Fact]
+    public void Pack_DeeplyNestedTree_IsWalkedWithoutRecursion() {
+        const int depth = 120;
+        string directory = DistPath(string.Empty);
+
+        try {
+            for (int index = 0; index < depth; index++) {
+                directory = Path.Combine(directory, "d");
+                Directory.CreateDirectory(directory);
+            }
+
+            File.WriteAllText(Path.Combine(directory, "leaf.ts"), string.Empty);
+        } catch (IOException) {
+            // Some file systems reject paths beyond their maximum length; the walk itself is still covered elsewhere.
+            return;
+        }
+
+        (int exitCode, string standardError) = RunPack();
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(standardError);
+        Assert.Contains(ReadEntryNames(), name => name.EndsWith("/leaf.ts", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Pack_SymlinkToFile_IsRejected() {
         WriteDistFile("target.txt");
         if (!TryCreateSymlink(DistPath("link.txt"), "target.txt")) {
