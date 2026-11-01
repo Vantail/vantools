@@ -64,6 +64,27 @@ The `verify` command performs the following checks:
 
 If all checks pass, it prints `OK` and exits with code `0`. If any check fails, it prints all detected errors to stderr and exits with a non-zero code.
 
+### Unpack
+
+Extracts an existing `.van` archive into a target directory.
+
+```bash
+dotnet run --project src/VanTools.csproj -- unpack --s <archive-path> --t <target-dir>
+```
+
+- `--s`: The path to the `.van` archive to extract.
+- `--t`: The target directory to extract the contents into.
+
+Example:
+
+```bash
+dotnet run --project src/VanTools.csproj -- unpack --s ./output/example-plugin-0.1.0.van --t ./extracted-plugin
+```
+
+Before extracting, the command validates the archive using the same checks as `verify`. If the archive is valid, it **completely wipes** the target directory (if it exists) and extracts `manifest.json` and the `dist/` folder into it.
+
+The extraction process includes defenses against path traversal (Zip-Slip) to ensure no files are written outside the target directory. For safety, the command refuses to use a filesystem root (e.g., `/` or `C:\`) or the current working directory as the target.
+
 ## The `.van` Format
 
 The archive format, validation rules, and path-safety requirements are defined in [SPEC.md](./docs/SPEC.md).
