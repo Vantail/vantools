@@ -52,6 +52,50 @@ public sealed class UnpackCommandTests {
             SnapshotTarget(target));
     }
 
+    [Fact]
+    public void Unpack_TargetIsFile_ReturnsRuntimeError() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(temp);
+        string target = temp.Combine("target");
+        File.WriteAllText(target, "keep me");
+
+        UnpackResult result = Unpack(archivePath, target);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains("exists but is a file, not a directory", result.StandardError);
+        Assert.Equal("keep me", File.ReadAllText(target));
+    }
+
+    [Fact]
+    public void Unpack_TargetIsRootDirectory_ReturnsRuntimeError() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(temp);
+        string root = Path.GetPathRoot(Path.GetFullPath(temp.FullPath))!;
+
+        UnpackResult result = Unpack(archivePath, root);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains(
+            "Refusing to use a root directory or the current working directory as the target.",
+            result.StandardError);
+    }
+
+    [Fact]
+    public void Unpack_TargetIsCurrentDirectory_ReturnsRuntimeError() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(temp);
+
+        UnpackResult result = Unpack(archivePath, ".");
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains(
+            "Refusing to use a root directory or the current working directory as the target.",
+            result.StandardError);
+    }
+
     [Theory]
     [InlineData("../evil.txt")]
     [InlineData("dist/../../evil.txt")]

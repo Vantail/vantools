@@ -9,6 +9,12 @@ public sealed class UnpackCommand : ICommand {
         ? StringComparison.OrdinalIgnoreCase
         : StringComparison.Ordinal;
 
+    // Directory paths compare case-insensitively on Windows and macOS, whose default file systems ignore case.
+    private static readonly StringComparison DirectoryPathComparison =
+        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
     private static readonly ArgumentParser Parser = new ArgumentParser()
         .Required("s", "source archive")
         .Required("t", "target directory");
@@ -64,16 +70,47 @@ public sealed class UnpackCommand : ICommand {
             return ExitCodes.RuntimeError;
         }
 
-        if (Directory.Exists(targetDirectory)) {
-            Directory.Delete(targetDirectory, recursive: true);
+        string resolvedTarget = Path.TrimEndingDirectorySeparator(Path.GetFullPath(targetDirectory));
+
+        if (IsRootOrCurrentDirectory(resolvedTarget)) {
+            ErrorWriter.Write("Refusing to use a root directory or the current working directory as the target.");
+            return ExitCodes.RuntimeError;
         }
 
-        Directory.CreateDirectory(targetDirectory);
-        Extract(sourcePath, targetDirectory);
+        if (File.Exists(resolvedTarget)) {
+            ErrorWriter.Write($"The target path '{targetDirectory}' exists but is a file, not a directory.");
+            return ExitCodes.RuntimeError;
+        }
+
+        if (Directory.Exists(resolvedTarget)) {
+            Directory.Delete(resolvedTarget, recursive: true);
+        }
+
+        Directory.CreateDirectory(resolvedTarget);
+        Extract(sourcePath, resolvedTarget);
 
         Console.Out.WriteLine("OK");
 
         return ExitCodes.Success;
+    }
+
+    // Reports whether the resolved path is a filesystem root or the current working directory.
+    // resolvedTarget: the absolute target path, without a trailing directory separator.
+    // Returns: true when deleting the path could remove a root or the working directory.
+    private static bool IsRootOrCurrentDirectory(string resolvedTarget) {
+        string? root = Path.GetPathRoot(resolvedTarget);
+        if (root is not null
+            && string.Equals(
+                resolvedTarget,
+                Path.TrimEndingDirectorySeparator(root),
+                DirectoryPathComparison)) {
+            return true;
+        }
+
+        string currentDirectory = Path.TrimEndingDirectorySeparator(
+            Path.GetFullPath(Environment.CurrentDirectory));
+
+        return string.Equals(resolvedTarget, currentDirectory, DirectoryPathComparison);
     }
 
     // Extracts every entry of the archive into the target directory.
