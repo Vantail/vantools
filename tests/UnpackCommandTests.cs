@@ -23,7 +23,7 @@ public sealed class UnpackCommandTests {
 
         Assert.Equal(
             ["dist", "dist/app.ts", "dist/subdir", "dist/subdir/file.txt", "manifest.json"],
-            PackTestHelper.SnapshotDirectory(target));
+            SnapshotTarget(target));
         Assert.Equal(ValidManifest, File.ReadAllText(Path.Combine(target, "manifest.json")));
         Assert.Equal("// app", File.ReadAllText(Path.Combine(target, "dist", "app.ts")));
         Assert.Equal("nested", File.ReadAllText(Path.Combine(target, "dist", "subdir", "file.txt")));
@@ -49,7 +49,18 @@ public sealed class UnpackCommandTests {
         Assert.False(Directory.Exists(Path.Combine(target, "old-dir")));
         Assert.Equal(
             ["dist", "dist/app.ts", "dist/subdir", "dist/subdir/file.txt", "manifest.json"],
-            PackTestHelper.SnapshotDirectory(target));
+            SnapshotTarget(target));
+    }
+
+    // The file system reports platform-specific separators; compare against forward slashes on every platform.
+    private static string[] SnapshotTarget(string targetDirectory) {
+        return
+        [
+            .. PackTestHelper
+                .SnapshotDirectory(targetDirectory)
+                .Select(path => path.Replace('\\', '/'))
+                .OrderBy(path => path, StringComparer.Ordinal)
+        ];
     }
 
     private static string CreateArchive(TempDirectory temp) {
