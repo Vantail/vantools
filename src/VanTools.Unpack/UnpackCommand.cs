@@ -5,16 +5,6 @@ namespace VanTools.Unpack;
 
 // The "unpack" subcommand, which extracts a .van archive into a target directory.
 public sealed class UnpackCommand : ICommand {
-    private static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
-        ? StringComparison.OrdinalIgnoreCase
-        : StringComparison.Ordinal;
-
-    // Directory paths compare case-insensitively on Windows and macOS, whose default file systems ignore case.
-    private static readonly StringComparison DirectoryPathComparison =
-        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-
     private static readonly ArgumentParser Parser = new ArgumentParser()
         .Required("s", "source archive")
         .Required("t", "target directory");
@@ -50,11 +40,11 @@ public sealed class UnpackCommand : ICommand {
         }
     }
 
-    // Validates the archive, replaces the target directory, and extracts the archive contents into it.
+    // Validates the archive and extracts it into the target directory.
     // sourcePath: the path to the .van archive.
     // targetDirectory: the directory that receives the extracted files; existing contents are removed.
     // Returns: ExitCodes.Success when the archive was extracted; otherwise ExitCodes.RuntimeError.
-    // Side effects: reads the archive, deletes and recreates the target directory, and writes the extracted files.
+    // Side effects: reads the archive, replaces the target directory, writes its files, and writes "error:" lines to stderr on failure.
     private static int Unpack(string sourcePath, string targetDirectory) {
         if (!File.Exists(sourcePath)) {
             ErrorWriter.Write($"Cannot open file '{sourcePath}': the file does not exist.");
@@ -70,60 +60,11 @@ public sealed class UnpackCommand : ICommand {
             return ExitCodes.RuntimeError;
         }
 
-        string resolvedTarget = Path.TrimEndingDirectorySeparator(Path.GetFullPath(targetDirectory));
-
-        if (IsRootOrCurrentDirectory(resolvedTarget)) {
-            ErrorWriter.Write("Refusing to use a root directory or the current working directory as the target.");
-            return ExitCodes.RuntimeError;
-        }
-
-        if (File.Exists(resolvedTarget)) {
-            ErrorWriter.Write($"The target path '{targetDirectory}' exists but is a file, not a directory.");
-            return ExitCodes.RuntimeError;
-        }
-
-        if (Directory.Exists(resolvedTarget)) {
-            Directory.Delete(resolvedTarget, recursive: true);
-        }
-
-        Directory.CreateDirectory(resolvedTarget);
-        Extract(sourcePath, resolvedTarget);
+        ArchiveExtractor.Extract(sourcePath, targetDirectory);
 
         Console.Out.WriteLine("OK");
 
         return ExitCodes.Success;
-    }
-
-    // Reports whether the resolved path is a filesystem root or the current working directory.
-    // resolvedTarget: the absolute target path, without a trailing directory separator.
-    // Returns: true when deleting the path could remove a root or the working directory.
-    private static bool IsRootOrCurrentDirectory(string resolvedTarget) {
-        string? root = Path.GetPathRoot(resolvedTarget);
-        if (root is not null
-            && string.Equals(
-                resolvedTarget,
-                Path.TrimEndingDirectorySeparator(root),
-                DirectoryPathComparison)) {
-            return true;
-        }
-
-        string currentDirectory = Path.TrimEndingDirectorySeparator(
-            Path.GetFullPath(Environment.CurrentDirectory));
-
-        return string.Equals(resolvedTarget, currentDirectory, DirectoryPathComparison);
-    }
-
-    // Extracts every entry of the archive into the target directory.
-    // sourcePath: the path to the .van archive.
-    // targetDirectory: the directory that receives the extracted files; it must already exist.
-    // Throws InvalidOperationException: when an entry would be written outside the target directory.
-    // Side effects: creates directories and writes files under the target directory.
-    private static void Extract(string sourcePath, string targetDirectory) {
-        using ZipArchive archive = ZipFile.OpenRead(sourcePath);
-
-        foreach (ZipArchiveEntry entry in archive.Entries) {
-            ExtractEntry(entry, targetDirectory);
-        }
     }
 
     // Extracts one archive entry into the target directory.
@@ -132,27 +73,6 @@ public sealed class UnpackCommand : ICommand {
     // Throws InvalidOperationException: when the entry would be written outside the target directory.
     // Side effects: creates directories and writes the entry under targetDir.
     internal static void ExtractEntry(ZipArchiveEntry entry, string targetDir) {
-        ArgumentNullException.ThrowIfNull(entry);
-        ArgumentNullException.ThrowIfNull(targetDir);
-
-        string fullTargetDir = Path.GetFullPath(targetDir);
-        string destinationPath = Path.GetFullPath(Path.Combine(fullTargetDir, entry.FullName));
-
-        // Defense in depth: the validator rejects unsafe names, but refuse to write outside the target directory regardless.
-        if (!destinationPath.StartsWith(fullTargetDir + Path.DirectorySeparatorChar, PathComparison)) {
-            throw new InvalidOperationException($"Zip-Slip detected for entry: '{entry.FullName}'");
-        }
-
-        if (entry.FullName.EndsWith('/')) {
-            Directory.CreateDirectory(destinationPath);
-            return;
-        }
-
-        string? parentDirectory = Path.GetDirectoryName(destinationPath);
-        if (!string.IsNullOrEmpty(parentDirectory)) {
-            Directory.CreateDirectory(parentDirectory);
-        }
-
-        entry.ExtractToFile(destinationPath, overwrite: true);
+        ArchiveExtractor.ExtractEntry(entry, targetDir);
     }
 }
