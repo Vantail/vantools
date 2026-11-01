@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="VanTools.Core\**;VanTools.Pack\**;VanTools.Unpack\**;VanTools.Verify\**" />
+    <Compile Remove="VanTools.Core\**;VanTools.Pack\**;VanTools.Unpack\**;VanTools.Verify\**;VanTools.Bridge.Native\**" />
   </ItemGroup>
 
   <ItemGroup>
