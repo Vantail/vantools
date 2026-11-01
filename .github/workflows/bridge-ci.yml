@@ -1,0 +1,95 @@
+name: Bridge CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-bridge:
+    name: Build bridge (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+            lib-name: libVanTools.Bridge.so
+            aot-name: VanTools.Bridge.Native.so
+          - os: macos-latest
+            rid: osx-arm64
+            lib-name: libVanTools.Bridge.dylib
+            aot-name: VanTools.Bridge.Native.dylib
+          - os: windows-latest
+            rid: win-x64
+            lib-name: VanTools.Bridge.dll
+            aot-name: VanTools.Bridge.Native.dll
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Set up MSVC (Windows only)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Install CMake (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+
+      # Linux and macOS use the build script, which publishes the AOT library
+      # and then builds the C bridge with CMake.
+      - name: Make build script executable (Unix)
+        if: runner.os != 'Windows'
+        run: chmod +x scripts/build_bridge.sh
+
+      - name: Build bridge (Unix)
+        if: runner.os != 'Windows'
+        run: ./scripts/build_bridge.sh ${{ matrix.rid }}
+
+      # Windows needs the explicit Visual Studio generator so MSVC is used.
+      - name: Build bridge (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          dotnet publish src/VanTools.Bridge.Native/VanTools.Bridge.Native.csproj -c Release -r ${{ matrix.rid }} /p:NativeLib=Shared -o out/aot
+
+          cmake -B src/VanTools.Bridge/build -S src/VanTools.Bridge -G "Visual Studio 17 2022" -A x64 -DAOT_DIR="${{ github.workspace }}/out/aot"
+          cmake --build src/VanTools.Bridge/build --config Release
+
+      - name: Verify output artifacts (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          if [ ! -f "src/VanTools.Bridge/build/${{ matrix.lib-name }}" ]; then
+            echo "error: the C bridge library ${{ matrix.lib-name }} was not produced."
+            exit 1
+          fi
+          if [ ! -f "out/aot/${{ matrix.aot-name }}" ]; then
+            echo "error: the Native AOT library ${{ matrix.aot-name }} was not produced."
+            exit 1
+          fi
+
+      - name: Verify output artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "src/VanTools.Bridge/build/Release/${{ matrix.lib-name }}")) {
+            Write-Error "The C bridge library ${{ matrix.lib-name }} was not produced."
+            exit 1
+          }
+          if (-not (Test-Path "out/aot/${{ matrix.aot-name }}")) {
+            Write-Error "The Native AOT library ${{ matrix.aot-name }} was not produced."
+            exit 1
+          }
