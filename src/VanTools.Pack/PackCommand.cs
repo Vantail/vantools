@@ -64,8 +64,20 @@ public sealed class PackCommand : ICommand {
         IReadOnlyList<PathEntry> distEntries = PathSafety.BuildEntries(distDirectory, Console.Error);
 
         string archiveName = $"{manifest.Name}-{manifest.Version}.van";
-        Directory.CreateDirectory(targetDirectory);
-        string archivePath = Path.Combine(targetDirectory, archiveName);
+        string resolvedTarget = Path.GetFullPath(targetDirectory);
+        string archivePath = Path.GetFullPath(Path.Combine(resolvedTarget, archiveName));
+
+        // Defense in depth: the manifest name is validated, but never write the archive outside the target directory.
+        StringComparison pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        if (!archivePath.StartsWith(
+                Path.TrimEndingDirectorySeparator(resolvedTarget) + Path.DirectorySeparatorChar,
+                pathComparison)) {
+            throw new ManifestException($"Archive path escapes the target directory: '{archiveName}'.");
+        }
+
+        Directory.CreateDirectory(resolvedTarget);
 
         using FileStream stream = new(archivePath, FileMode.Create, FileAccess.Write);
         using ZipArchive archive = new(stream, ZipArchiveMode.Create);

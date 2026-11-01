@@ -5,6 +5,12 @@ namespace VanTools.Core;
 
 // Validates the contents of a manifest.json document, collecting every problem instead of stopping at the first one.
 public static class ManifestValidator {
+    private const int MaxPackageNameLength = 214;
+
+    private static readonly Regex PackageNamePattern = new(
+        "^[a-z0-9][a-z0-9._-]*$",
+        RegexOptions.CultureInvariant);
+
     private static readonly Regex SemVerPattern = new(
         "^" +
         "(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)" +
@@ -52,6 +58,10 @@ public static class ManifestValidator {
             string? version = ReadRequiredString(root, "version", errors);
             string? entrypoint = ReadRequiredString(root, "entrypoint", errors);
 
+            if (name is not null) {
+                ValidateName(name, errors);
+            }
+
             if (version is not null && !SemVerPattern.IsMatch(version)) {
                 errors.Add($"Manifest member 'version' is not a valid SemVer 2.0.0 version: '{version}'.");
             }
@@ -87,6 +97,15 @@ public static class ManifestValidator {
         }
 
         return text;
+    }
+
+    // Records a message when the name is not an npm package name, so it can never carry a path separator or a traversal segment.
+    // name: the name value from the manifest.
+    // errors: the list that receives the problem description.
+    private static void ValidateName(string name, List<string> errors) {
+        if (name.Length > MaxPackageNameLength || !PackageNamePattern.IsMatch(name)) {
+            errors.Add($"Manifest member 'name' is not a valid npm package name: '{name}'.");
+        }
     }
 
     // Records a message when the entrypoint is absolute, carries a drive letter, or contains a ".." segment.

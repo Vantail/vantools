@@ -201,6 +201,28 @@ public sealed class PackCommandIntegrationTests {
         PackTestHelper.AssertNoArchive(target);
     }
 
+    [Theory]
+    [InlineData("../escaped")]
+    [InlineData("/tmp/absolute")]
+    [InlineData("a/b")]
+    [InlineData("..")]
+    public void Pack_PathLikeManifestName_IsRejected(string name) {
+        using TempDirectory temp = new();
+        string source = PackTestHelper.CreateSource(
+            temp,
+            $$"""{ "name": "{{name}}", "version": "0.1.0", "entrypoint": "app.ts" }""");
+        PackTestHelper.WriteDistFile(source, "app.ts");
+        string target = PackTestHelper.CreateTarget(temp);
+
+        PackResult result = PackTestHelper.Run("--s", source, "--t", target);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        AssertStartsWithError(result);
+        Assert.Contains("not a valid npm package name", result.StandardError);
+        PackTestHelper.AssertNoArchive(target);
+        Assert.Empty(Directory.GetFiles(temp.FullPath, "*.van", SearchOption.AllDirectories));
+    }
+
     [Fact]
     public void Pack_UnknownOption_ReturnsUsageError() {
         using TempDirectory temp = new();

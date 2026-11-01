@@ -97,6 +97,25 @@ public sealed class ManifestValidationTests : IDisposable {
         Assert.Throws<ManifestException>(() => Manifest.LoadFrom(sourceDirectory));
     }
 
+    [Theory]
+    [InlineData("../x")]
+    [InlineData("/abs/x")]
+    [InlineData("a/b")]
+    [InlineData("a\\b")]
+    [InlineData("C:x")]
+    [InlineData("..")]
+    [InlineData(".hidden")]
+    [InlineData("_private")]
+    [InlineData("Upper")]
+    public void LoadFrom_InvalidPackageName_Throws(string name) {
+        WriteManifest($$"""{ "name": "{{name}}", "version": "0.1.0", "entrypoint": "app.ts" }""");
+        WriteEntrypoint();
+
+        ManifestException exception = Assert.Throws<ManifestException>(() => Manifest.LoadFrom(sourceDirectory));
+
+        Assert.Contains(exception.Errors, error => error.Contains("not a valid npm package name", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void LoadFrom_MissingVersion_Throws() {
         WriteManifest("""{ "name": "example", "entrypoint": "app.ts" }""");
