@@ -1,8 +1,7 @@
 using System.IO.Compression;
 using System.Text;
-using VanTools.Core;
 
-namespace VanTools.Verify;
+namespace VanTools.Core;
 
 // Validates a .van archive and reports every problem it finds.
 public static class ArchiveValidator {
