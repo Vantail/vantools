@@ -58,6 +58,7 @@ public static class ArchiveValidator {
         }
 
         List<string> errors = ManifestValidator.Validate(jsonContent, out Manifest? manifest);
+        CollectEntryNameErrors(archive, errors);
         CollectFilenameErrors(archivePath, manifest, errors);
         CollectDistErrors(archive, errors);
         CollectNodeModulesErrors(archive, errors);
@@ -96,6 +97,78 @@ public static class ArchiveValidator {
         return $"manifest.json is {length} bytes; the limit is {MaxManifestBytes}.";
     }
 
+    // Records one message per entry name that violates the SPEC §6 path rules.
+    // archive: the opened archive.
+    // errors: the list that receives the problem descriptions.
+    private static void CollectEntryNameErrors(ZipArchive archive, List<string> errors) {
+        foreach (ZipArchiveEntry entry in archive.Entries) {
+            if (TryDescribeUnsafeName(entry.FullName, out string reason)) {
+                errors.Add($"The archive entry '{entry.FullName}' {reason}.");
+            }
+        }
+    }
+
+    // Reports whether an entry name satisfies the SPEC §6 path rules.
+    // entryName: the entry name to check.
+    // Returns: true when the name uses "/" separators, is relative, has no empty, ".", or ".." segments, and is NFC.
+    private static bool IsSafeEntryName(string entryName) {
+        return !TryDescribeUnsafeName(entryName, out _);
+    }
+
+    // Tests an entry name against the SPEC §6 path rules.
+    // entryName: the entry name to check.
+    // reason: the reason for rejection when the result is true; otherwise an empty string.
+    // Returns: true when the name violates a rule.
+    private static bool TryDescribeUnsafeName(string entryName, out string reason) {
+        if (entryName.Length == 0) {
+            reason = "is empty";
+            return true;
+        }
+
+        if (entryName.StartsWith('/') || entryName.StartsWith('\\')) {
+            reason = "must be relative";
+            return true;
+        }
+
+        if (entryName.Length >= 2 && char.IsLetter(entryName[0]) && entryName[1] == ':') {
+            reason = "must not contain a drive letter";
+            return true;
+        }
+
+        if (entryName.Contains('\\')) {
+            reason = "must use '/' as the path separator";
+            return true;
+        }
+
+        // A directory entry conventionally ends with "/", which is not an empty segment of its own.
+        string path = entryName.EndsWith('/') ? entryName[..^1] : entryName;
+        if (path.Length == 0) {
+            reason = "is empty";
+            return true;
+        }
+
+        foreach (string segment in path.Split('/')) {
+            if (segment.Length == 0) {
+                reason = "must not contain empty segments";
+                return true;
+            }
+
+            if (segment is "." or "..") {
+                reason = "must not contain '.' or '..' segments";
+                return true;
+            }
+        }
+
+        if (!entryName.IsNormalized(NormalizationForm.FormC)) {
+            reason = "is not in Unicode NFC form";
+            return true;
+        }
+
+        reason = string.Empty;
+
+        return false;
+    }
+
     // Records a message when the archive filename is not "<name>-<version>.van" as derived from the manifest.
     // archivePath: the path the archive was opened from.
     // manifest: the values parsed from the manifest, or null when the manifest could not be read.
@@ -123,9 +196,10 @@ public static class ArchiveValidator {
         const string distEntryName = DistDirectoryName + "/";
 
         bool hasDist = archive.Entries.Any(entry =>
-            string.Equals(entry.FullName, distEntryName, StringComparison.Ordinal)
-            || string.Equals(entry.FullName, DistDirectoryName, StringComparison.Ordinal)
-            || entry.FullName.StartsWith(distEntryName, StringComparison.Ordinal));
+            IsSafeEntryName(entry.FullName)
+            && (string.Equals(entry.FullName, distEntryName, StringComparison.Ordinal)
+                || string.Equals(entry.FullName, DistDirectoryName, StringComparison.Ordinal)
+                || entry.FullName.StartsWith(distEntryName, StringComparison.Ordinal)));
 
         if (!hasDist) {
             errors.Add("The 'dist/' directory is missing from the archive root.");

@@ -149,6 +149,61 @@ public sealed class VerifyCommandTests {
         Assert.DoesNotContain("Invalid JSON format", result.StandardError);
     }
 
+    [Theory]
+    [InlineData("../evil.txt", "must not contain '.' or '..' segments")]
+    [InlineData("/abs/evil.sh", "must be relative")]
+    [InlineData("C:/evil.sh", "must not contain a drive letter")]
+    [InlineData("dist\\..\\evil", "must use '/' as the path separator")]
+    [InlineData("dist/./dotfile", "must not contain '.' or '..' segments")]
+    [InlineData("dist//double", "must not contain empty segments")]
+    public void Verify_UnsafeEntryName_ReturnsRuntimeError(string entryName, string reason) {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(
+            temp,
+            "my-plugin-0.1.0.van",
+            ValidManifest,
+            [("dist/app.ts", "// app"), (entryName, "")]);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains($"The archive entry '{entryName}' {reason}.", result.StandardError);
+    }
+
+    [Fact]
+    public void Verify_NonNfcEntryName_ReturnsRuntimeError() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(
+            temp,
+            "my-plugin-0.1.0.van",
+            ValidManifest,
+            [("dist/app.ts", "// app"), ("dist/cafe\u0301.ts", "")]);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains("is not in Unicode NFC form", result.StandardError);
+    }
+
+    [Fact]
+    public void Verify_TraversalEntry_DoesNotSatisfyDistRequirement() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(
+            temp,
+            "my-plugin-0.1.0.van",
+            ValidManifest,
+            [("dist/../secret.ts", "")]);
+
+        VerifyResult result = Verify(archivePath);
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains("must not contain '.' or '..' segments", result.StandardError);
+        Assert.Contains("The 'dist/' directory is missing from the archive root.", result.StandardError);
+    }
+
     [Fact]
     public void Verify_NodeModulesAtRoot_ReturnsRuntimeError() {
         using TempDirectory temp = new();
