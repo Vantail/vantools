@@ -78,13 +78,9 @@ public static class PathSafety {
                      .EnumerateFileSystemInfos()
                      .OrderBy(info => info.Name, StringComparer.Ordinal)) {
             ThrowIfNotRegular(child);
+            ThrowIfNotNfc(child);
 
-            if (!IsNfc(child.Name)) {
-                throw new PathSafetyException(
-                    $"Name is not in Unicode NFC form and would be normalized silently: '{child.FullName}'.");
-            }
-
-            if (child is DirectoryInfo subdirectory
+            if (child is DirectoryInfo
                 && string.Equals(child.Name, NodeModulesDirectoryName, StringComparison.Ordinal)) {
                 warnings.WriteLine(NodeModulesWarning);
                 continue;
@@ -105,15 +101,32 @@ public static class PathSafety {
                 ?? throw new PathSafetyException(
                     $"Unsupported file system entry (not a regular file or directory): '{child.FullName}'.");
 
-            if (seen.TryGetValue(entryName, out string? existingPath)) {
-                throw new PathSafetyException(
-                    $"Case-insensitive duplicate archive entry '{entryName}' produced by "
-                    + $"'{existingPath}' and '{file.FullName}'.");
-            }
-
-            seen[entryName] = file.FullName;
-            entries.Add(new PathEntry(entryName, file.FullName));
+            AddEntry(entries, seen, entryName, file);
         }
+    }
+
+    private static void ThrowIfNotNfc(FileSystemInfo entry) {
+        if (IsNfc(entry.Name)) {
+            return;
+        }
+
+        throw new PathSafetyException(
+            $"Name is not in Unicode NFC form and would be normalized silently: '{entry.FullName}'.");
+    }
+
+    private static void AddEntry(
+        List<PathEntry> entries,
+        Dictionary<string, string> seen,
+        string entryName,
+        FileInfo file) {
+        if (seen.TryGetValue(entryName, out string? existingPath)) {
+            throw new PathSafetyException(
+                $"Case-insensitive duplicate archive entry '{entryName}' produced by "
+                + $"'{existingPath}' and '{file.FullName}'.");
+        }
+
+        seen[entryName] = file.FullName;
+        entries.Add(new PathEntry(entryName, file.FullName));
     }
 
     private static void ThrowIfNotRegular(FileSystemInfo entry) {
