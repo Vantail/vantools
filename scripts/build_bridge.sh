@@ -61,17 +61,18 @@ if [ -z "$RID" ]; then
 fi
 echo "Runtime identifier: $RID"
 
-# macOS only: the Native AOT linker always passes -lssl and -lcrypto, and
-# Homebrew keeps those libraries outside the default linker search path.
+# macOS only: the Native AOT linker always passes -lssl, -lcrypto, and the
+# Brotli libraries, and Homebrew keeps them outside the default search path.
+# Add every directory that exists, since OpenSSL and Brotli are installed in
+# different prefixes.
 if [ "$(uname -s)" = "Darwin" ]; then
-    for openssl_lib_dir in \
+    for native_lib_dir in \
         /opt/homebrew/opt/openssl@3/lib \
         /opt/homebrew/opt/openssl@4/lib \
         /usr/local/opt/openssl/lib \
         /opt/homebrew/lib; do
-        if [ -e "$openssl_lib_dir/libssl.dylib" ]; then
-            export LIBRARY_PATH="$openssl_lib_dir${LIBRARY_PATH:+:$LIBRARY_PATH}"
-            break
+        if [ -d "$native_lib_dir" ]; then
+            export LIBRARY_PATH="$native_lib_dir${LIBRARY_PATH:+:$LIBRARY_PATH}"
         fi
     done
 fi
