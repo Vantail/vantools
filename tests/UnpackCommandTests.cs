@@ -52,6 +52,43 @@ public sealed class UnpackCommandTests {
             SnapshotTarget(target));
     }
 
+    [Theory]
+    [InlineData("../evil.txt")]
+    [InlineData("dist/../../evil.txt")]
+    public void ExtractEntry_PathOutsideTarget_ThrowsAndWritesNothing(string entryName) {
+        using TempDirectory temp = new();
+        string archivePath = CreateSingleEntryArchive(temp, entryName, "escaped");
+        string target = temp.Combine("target");
+        Directory.CreateDirectory(target);
+
+        using ZipArchive archive = ZipFile.OpenRead(archivePath);
+        ZipArchiveEntry entry = Assert.Single(archive.Entries);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => UnpackCommand.ExtractEntry(entry, target));
+
+        Assert.Equal($"Zip-Slip detected for entry: '{entryName}'", exception.Message);
+        Assert.False(File.Exists(temp.Combine("evil.txt")));
+        Assert.Empty(PackTestHelper.SnapshotDirectory(target));
+    }
+
+    [Fact]
+    public void ExtractEntry_RegularFile_WritesInsideTarget() {
+        using TempDirectory temp = new();
+        string archivePath = CreateSingleEntryArchive(temp, "dist/app.ts", "// app");
+        string target = temp.Combine("target");
+        Directory.CreateDirectory(target);
+
+        using ZipArchive archive = ZipFile.OpenRead(archivePath);
+        ZipArchiveEntry entry = Assert.Single(archive.Entries);
+
+        UnpackCommand.ExtractEntry(entry, target);
+
+        string extractedPath = Path.Combine(target, "dist", "app.ts");
+        Assert.True(File.Exists(extractedPath));
+        Assert.Equal("// app", File.ReadAllText(extractedPath));
+    }
+
     // The file system reports platform-specific separators; compare against forward slashes on every platform.
     private static string[] SnapshotTarget(string targetDirectory) {
         return
@@ -71,6 +108,17 @@ public sealed class UnpackCommandTests {
             WriteEntry(archive, "manifest.json", ValidManifest);
             WriteEntry(archive, "dist/app.ts", "// app");
             WriteEntry(archive, "dist/subdir/file.txt", "nested");
+        }
+
+        return archivePath;
+    }
+
+    private static string CreateSingleEntryArchive(TempDirectory temp, string name, string content) {
+        string archivePath = temp.Combine("single.zip");
+
+        using (FileStream stream = new(archivePath, FileMode.Create, FileAccess.Write))
+        using (ZipArchive archive = new(stream, ZipArchiveMode.Create)) {
+            WriteEntry(archive, name, content);
         }
 
         return archivePath;

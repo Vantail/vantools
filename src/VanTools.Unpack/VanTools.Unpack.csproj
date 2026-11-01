@@ -10,4 +10,8 @@
     <ProjectReference Include="..\VanTools.Core\VanTools.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="VanTest" />
+  </ItemGroup>
+
 </Project>

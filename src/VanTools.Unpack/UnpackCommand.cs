@@ -79,34 +79,43 @@ public sealed class UnpackCommand : ICommand {
     // Extracts every entry of the archive into the target directory.
     // sourcePath: the path to the .van archive.
     // targetDirectory: the directory that receives the extracted files; it must already exist.
-    // Throws IOException: when an entry would be written outside the target directory.
+    // Throws InvalidOperationException: when an entry would be written outside the target directory.
     // Side effects: creates directories and writes files under the target directory.
     private static void Extract(string sourcePath, string targetDirectory) {
-        string targetRoot = Path.GetFullPath(targetDirectory);
-        string targetPrefix = targetRoot + Path.DirectorySeparatorChar;
-
         using ZipArchive archive = ZipFile.OpenRead(sourcePath);
 
         foreach (ZipArchiveEntry entry in archive.Entries) {
-            string destinationPath = Path.GetFullPath(Path.Combine(targetRoot, entry.FullName));
-
-            // Defense in depth: the validator rejects unsafe names, but refuse to write outside the target directory regardless.
-            if (!destinationPath.StartsWith(targetPrefix, PathComparison)) {
-                throw new IOException(
-                    $"Archive entry '{entry.FullName}' would be extracted outside the target directory '{targetRoot}'.");
-            }
-
-            if (entry.FullName.EndsWith('/')) {
-                Directory.CreateDirectory(destinationPath);
-                continue;
-            }
-
-            string? parentDirectory = Path.GetDirectoryName(destinationPath);
-            if (!string.IsNullOrEmpty(parentDirectory)) {
-                Directory.CreateDirectory(parentDirectory);
-            }
-
-            entry.ExtractToFile(destinationPath, overwrite: true);
+            ExtractEntry(entry, targetDirectory);
         }
+    }
+
+    // Extracts one archive entry into the target directory.
+    // entry: the archive entry to write.
+    // targetDir: the directory that receives the entry; it must already exist.
+    // Throws InvalidOperationException: when the entry would be written outside the target directory.
+    // Side effects: creates directories and writes the entry under targetDir.
+    internal static void ExtractEntry(ZipArchiveEntry entry, string targetDir) {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(targetDir);
+
+        string fullTargetDir = Path.GetFullPath(targetDir);
+        string destinationPath = Path.GetFullPath(Path.Combine(fullTargetDir, entry.FullName));
+
+        // Defense in depth: the validator rejects unsafe names, but refuse to write outside the target directory regardless.
+        if (!destinationPath.StartsWith(fullTargetDir + Path.DirectorySeparatorChar, PathComparison)) {
+            throw new InvalidOperationException($"Zip-Slip detected for entry: '{entry.FullName}'");
+        }
+
+        if (entry.FullName.EndsWith('/')) {
+            Directory.CreateDirectory(destinationPath);
+            return;
+        }
+
+        string? parentDirectory = Path.GetDirectoryName(destinationPath);
+        if (!string.IsNullOrEmpty(parentDirectory)) {
+            Directory.CreateDirectory(parentDirectory);
+        }
+
+        entry.ExtractToFile(destinationPath, overwrite: true);
     }
 }
