@@ -96,6 +96,34 @@ public sealed class UnpackCommandTests {
             result.StandardError);
     }
 
+    [Fact]
+    public void Unpack_TargetIsAncestorOfCurrentDirectory_ReturnsRuntimeError() {
+        using TempDirectory temp = new();
+        string archivePath = CreateArchive(temp);
+        string child = temp.Combine("child");
+        Directory.CreateDirectory(child);
+        File.WriteAllText(Path.Combine(child, "marker.txt"), "keep");
+        string originalDirectory = Environment.CurrentDirectory;
+
+        UnpackResult result = null!;
+        try {
+            Environment.CurrentDirectory = child;
+
+            // Resolve the target from the process view of the working directory, which can be a physical path
+            // on macOS where the temporary directory is reached through a symbolic link.
+            result = Unpack(archivePath, Path.GetDirectoryName(Environment.CurrentDirectory)!);
+        } finally {
+            Environment.CurrentDirectory = originalDirectory;
+        }
+
+        Assert.Equal(ExitCodes.RuntimeError, result.ExitCode);
+        Assert.Empty(result.StandardOut);
+        Assert.Contains(
+            "Refusing to use a directory that contains the current working directory as the target.",
+            result.StandardError);
+        Assert.True(File.Exists(Path.Combine(child, "marker.txt")));
+    }
+
     [Theory]
     [InlineData("../evil.txt")]
     [InlineData("dist/../../evil.txt")]

@@ -20,7 +20,7 @@ public static class ArchiveExtractor {
     // Replaces the target directory with the contents of the archive.
     // archivePath: the path to the .van archive.
     // targetDir: the directory that receives the extracted files; existing contents are removed.
-    // Throws InvalidOperationException: when targetDir is a filesystem root, the current working directory, or an existing file, or when an entry resolves outside targetDir.
+    // Throws InvalidOperationException: when targetDir is a filesystem root, the current working directory or one of its ancestors, or an existing file, or when an entry resolves outside targetDir.
     // Side effects: deletes and recreates targetDir, then writes the extracted files.
     public static void Extract(string archivePath, string targetDir) {
         ArgumentNullException.ThrowIfNull(archivePath);
@@ -31,6 +31,11 @@ public static class ArchiveExtractor {
         if (IsRootOrCurrentDirectory(resolvedTarget)) {
             throw new InvalidOperationException(
                 "Refusing to use a root directory or the current working directory as the target.");
+        }
+
+        if (IsAncestorOfCurrentDirectory(resolvedTarget)) {
+            throw new InvalidOperationException(
+                "Refusing to use a directory that contains the current working directory as the target.");
         }
 
         if (File.Exists(resolvedTarget)) {
@@ -142,6 +147,18 @@ public static class ArchiveExtractor {
         } catch (UnauthorizedAccessException) {
             // The original extraction error is the one worth reporting.
         }
+    }
+
+    // Reports whether the resolved path contains the current working directory.
+    // resolvedTarget: the absolute target path, without a trailing directory separator.
+    // Returns: true when deleting the path would also delete the working directory.
+    private static bool IsAncestorOfCurrentDirectory(string resolvedTarget) {
+        string currentDirectory = Path.TrimEndingDirectorySeparator(
+            Path.GetFullPath(Environment.CurrentDirectory));
+
+        return currentDirectory.StartsWith(
+            resolvedTarget + Path.DirectorySeparatorChar,
+            DirectoryPathComparison);
     }
 
     // Reports whether the resolved path is a filesystem root or the current working directory.
