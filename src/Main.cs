@@ -1,10 +1,12 @@
 using VanTools.Core;
 using VanTools.Pack;
+using VanTools.Unpack;
 using VanTools.Verify;
 
 CommandRegistry registry = new("vantools");
 registry.Register(new PackCommand());
 registry.Register(new VerifyCommand());
+registry.Register(new UnpackCommand());
 
 if (args.Length == 0) {
     Console.Out.Write(registry.RenderTopLevelUsage());

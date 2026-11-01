@@ -24,10 +24,10 @@ public static class ManifestValidator {
 
     // Validates a manifest.json document and reports the values it could read.
     // jsonContent: the raw manifest.json text.
-    // manifest: the parsed manifest when the document is an object that carries a name and version; otherwise null.
+    // manifest: the parsed manifest when the document is an object that carries a name and version, even when other problems are reported; otherwise null.
     // Returns: an empty list when the manifest is valid; otherwise one message per problem found.
     // Throws ArgumentNullException: when jsonContent is null.
-    internal static List<string> Validate(string jsonContent, out Manifest? manifest) {
+    public static List<string> Validate(string jsonContent, out Manifest? manifest) {
         ArgumentNullException.ThrowIfNull(jsonContent);
 
         List<string> errors = [];
